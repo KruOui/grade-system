@@ -1,0 +1,3115 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ระบบตรวจสอบผลการเรียน — โรงเรียนป่าลาน</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <style>* { box-sizing:border-box; margin:0; padding:0; } body { font-family:'Sarabun',sans-serif; }</style>
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+// ── Constants ──────────────────────────────────────────────
+const SUBJECTS_BASE = ["คอมพิวเตอร์", "วิทยาการคำนวณ", "ออกแบบและเทคโนโลยี"];
+const LEVELS = ["ม.1", "ม.2", "ม.3"];
+const ALL_SUBJECTS = SUBJECTS_BASE.flatMap(s => LEVELS.map(l => `${s} ${l}`));
+const DEFAULT_PIN = "1234";
+const YEARS = ["2566", "2567", "2568", "2569", "2570"];
+const TERMS = ["1", "2"];
+function calcGrade(total) {
+  if (total === "" || total === null || isNaN(total)) return null;
+  const t = Number(total);
+  if (t < 50) return "0";
+  if (t <= 55) return "1";
+  if (t <= 59) return "1.5";
+  if (t <= 64) return "2";
+  if (t <= 69) return "2.5";
+  if (t <= 74) return "3";
+  if (t <= 79) return "3.5";
+  return "4";
+}
+function gradeColor(grade) {
+  if (!grade || grade === "0") return {
+    bg: "#fef2f2",
+    text: "#dc2626",
+    border: "#fca5a5"
+  };
+  if (grade === "1" || grade === "1.5") return {
+    bg: "#fff7ed",
+    text: "#ea580c",
+    border: "#fdba74"
+  };
+  if (grade === "2" || grade === "2.5") return {
+    bg: "#fefce8",
+    text: "#ca8a04",
+    border: "#fde047"
+  };
+  if (grade === "3") return {
+    bg: "#f0fdf4",
+    text: "#16a34a",
+    border: "#86efac"
+  };
+  if (grade === "3.5") return {
+    bg: "#ecfdf5",
+    text: "#059669",
+    border: "#6ee7b7"
+  };
+  return {
+    bg: "#eff6ff",
+    text: "#1d4ed8",
+    border: "#93c5fd"
+  };
+}
+
+// สถานะคะแนน
+function scoreStatus(sc) {
+  const noCollect = sc.collect === "" || sc.collect === null || sc.collect === undefined || String(sc.collect) === "";
+  const noExam = sc.exam === "" || sc.exam === null || sc.exam === undefined || String(sc.exam) === "";
+  const zeroCollect = Number(sc.collect) === 0 && !noCollect;
+  const zeroExam = Number(sc.exam) === 0 && !noExam;
+  if (noCollect && noExam) return {
+    label: "รอคะแนนเก็บและสอบ",
+    color: "#6366f1",
+    bg: "#eef2ff",
+    border: "#c7d2fe"
+  };
+  if (noCollect || zeroCollect && noExam) return {
+    label: "รอคะแนนเก็บ",
+    color: "#d97706",
+    bg: "#fffbeb",
+    border: "#fde68a"
+  };
+  if (noExam || zeroExam && noCollect) return {
+    label: "รอคะแนนสอบ",
+    color: "#0891b2",
+    bg: "#ecfeff",
+    border: "#a5f3fc"
+  };
+  return null; // ครบแล้ว
+}
+
+// รายชื่อนักเรียน 71 คน (ม.1: 26, ม.2: 19, ม.3: 26)
+const DEMO_STUDENTS = [{
+  id: "1878",
+  name: "เด็กชายณัฐนิช รัตนาภรณ์",
+  level: "ม.1"
+}, {
+  id: "1879",
+  name: "เด็กชายธนัตถ์ ธันนะกาน",
+  level: "ม.1"
+}, {
+  id: "1882",
+  name: "เด็กชายนนทพัทธ์ ฟ้านิมิตสวย",
+  level: "ม.1"
+}, {
+  id: "1883",
+  name: "เด็กชายปวรปรัชญ์ ใจประเสริฐยิ่ง",
+  level: "ม.1"
+}, {
+  id: "1885",
+  name: "เด็กชายยศกร นันสว่าง",
+  level: "ม.1"
+}, {
+  id: "1886",
+  name: "เด็กชายรัฐภูมิ ใจประเสริฐยิ่ง",
+  level: "ม.1"
+}, {
+  id: "1889",
+  name: "เด็กหญิงกชพร วรจารุวรรณ",
+  level: "ม.1"
+}, {
+  id: "1891",
+  name: "เด็กหญิงขนิษฐา เกิดเหตุผล",
+  level: "ม.1"
+}, {
+  id: "1892",
+  name: "เด็กหญิงเจนจิรา ศิรายุทธ",
+  level: "ม.1"
+}, {
+  id: "1893",
+  name: "เด็กหญิงเบญญาภา เกียรติอรุณเลิศ",
+  level: "ม.1"
+}, {
+  id: "1895",
+  name: "เด็กหญิงพิฌาญา สกุลแก้วมณีรัตน์",
+  level: "ม.1"
+}, {
+  id: "1897",
+  name: "เด็กหญิงศศิภรณ์ สกุณาสีทอง",
+  level: "ม.1"
+}, {
+  id: "1899",
+  name: "เด็กหญิงอินธิรา เพียงพิชิตผล",
+  level: "ม.1"
+}, {
+  id: "2005",
+  name: "เด็กหญิงแสงตะวัน ไม่มีชื่อสกุล",
+  level: "ม.1"
+}, {
+  id: "2055",
+  name: "เด็กหญิงบุญญิศา ไม่มีชื่อสกุล",
+  level: "ม.1"
+}, {
+  id: "2092",
+  name: "เด็กชายนัฐภูมิ ป่าคุณธรรม",
+  level: "ม.1"
+}, {
+  id: "2163",
+  name: "เด็กหญิงสุธินา วินิจวนาลัย",
+  level: "ม.1"
+}, {
+  id: "2269",
+  name: "เด็กชายจิตติพัฒน์ กำลาภยศ",
+  level: "ม.1"
+}, {
+  id: "2270",
+  name: "เด็กชายชาติ บุญญฤทธิ์โภคิน",
+  level: "ม.1"
+}, {
+  id: "2271",
+  name: "เด็กชายธวัชชัย นะติกา",
+  level: "ม.1"
+}, {
+  id: "2272",
+  name: "เด็กชายพงริม หว่างไม",
+  level: "ม.1"
+}, {
+  id: "2273",
+  name: "เด็กชายแสง ไม่มีชื่อสกุล",
+  level: "ม.1"
+}, {
+  id: "2274",
+  name: "เด็กหญิงณิชฌาภัษณ์ คีรีรุ่งถาวร",
+  level: "ม.1"
+}, {
+  id: "2275",
+  name: "เด็กหญิงยิง ไม่มีชื่อสกุล",
+  level: "ม.1"
+}, {
+  id: "2276",
+  name: "เด็กหญิงวันทนา สุขเจริญเกษม",
+  level: "ม.1"
+}, {
+  id: "2278",
+  name: "เด็กชายพงศกร ตั้งใจกุศลดี",
+  level: "ม.1"
+}, {
+  id: "1859",
+  name: "เด็กชายภาณุวิชญ์ ซอหนั่นต่า",
+  level: "ม.2"
+}, {
+  id: "1860",
+  name: "เด็กชายมังกร สาระพี",
+  level: "ม.2"
+}, {
+  id: "1861",
+  name: "เด็กชายสุภวัทน์ วัลสาย",
+  level: "ม.2"
+}, {
+  id: "1862",
+  name: "เด็กหญิงกิตติพันธุ์ คีรีเขตสุวรรณ",
+  level: "ม.2"
+}, {
+  id: "1864",
+  name: "เด็กหญิงแคร์ คำฟู",
+  level: "ม.2"
+}, {
+  id: "1867",
+  name: "เด็กหญิงสุดารัตน์ ปณิตานนท์",
+  level: "ม.2"
+}, {
+  id: "1875",
+  name: "เด็กชายเจษฎา คิ้วสุขจำเริญ",
+  level: "ม.2"
+}, {
+  id: "2212",
+  name: "เด็กชายธีรภัทร์ คำใส",
+  level: "ม.2"
+}, {
+  id: "2234",
+  name: "เด็กชายซีมง แซ่เห่อ",
+  level: "ม.2"
+}, {
+  id: "2235",
+  name: "เด็กชายดรัณภพ วัฒนภูมิสันติกุล",
+  level: "ม.2"
+}, {
+  id: "2236",
+  name: "เด็กชายธันวา ยอดเชิงฉลาด",
+  level: "ม.2"
+}, {
+  id: "2238",
+  name: "เด็กชายวาริศ สกุลกระจ่าง",
+  level: "ม.2"
+}, {
+  id: "2240",
+  name: "เด็กชายอนวัช พรนราพัชรกุล",
+  level: "ม.2"
+}, {
+  id: "2241",
+  name: "เด็กหญิงกัญญาพัชร ม่านเรืองสุวรรณ",
+  level: "ม.2"
+}, {
+  id: "2242",
+  name: "เด็กหญิงธัญสรณ์ รักษ์วัฒนธรรม",
+  level: "ม.2"
+}, {
+  id: "2243",
+  name: "เด็กหญิงพนิดา ประภากรเนตร",
+  level: "ม.2"
+}, {
+  id: "2244",
+  name: "เด็กหญิงรัชนก ขจรสิริทรัพย์",
+  level: "ม.2"
+}, {
+  id: "2245",
+  name: "เด็กหญิงอรพรรณ อมรชัยเลิศ",
+  level: "ม.2"
+}, {
+  id: "2246",
+  name: "เด็กหญิงอติพร ทวีโชติเดชา",
+  level: "ม.2"
+}, {
+  id: "2253",
+  name: "เด็กชายไกรสิทธิ ไพรนันทวงศ์",
+  level: "ม.2"
+}, {
+  id: "1749",
+  name: "เด็กหญิงวันดี งามเสมาพันธ์",
+  level: "ม.3"
+}, {
+  id: "1785",
+  name: "เด็กชายภัทรพล คีรีสามสิบ",
+  level: "ม.3"
+}, {
+  id: "1788",
+  name: "เด็กชายธนภัทร โนวรรณ",
+  level: "ม.3"
+}, {
+  id: "1789",
+  name: "เด็กชายนวพล รัตนะวัน",
+  level: "ม.3"
+}, {
+  id: "1790",
+  name: "เด็กชายวรภัทร รัตนสันติทวีผล",
+  level: "ม.3"
+}, {
+  id: "1793",
+  name: "เด็กหญิงกชกร ชัยรักษาพันธ์",
+  level: "ม.3"
+}, {
+  id: "1870",
+  name: "เด็กหญิงลักษิกา ไพรคุ้มครอง",
+  level: "ม.3"
+}, {
+  id: "1925",
+  name: "เด็กชายชาญวิทย์ อ้ายหนาน",
+  level: "ม.3"
+}, {
+  id: "2108",
+  name: "เด็กชายอนาวิล โชคอนันกุล",
+  level: "ม.3"
+}, {
+  id: "2187",
+  name: "เด็กชายชนาธิป จิรวัชรโภคิน",
+  level: "ม.3"
+}, {
+  id: "2190",
+  name: "เด็กชายมิ้น ไม่มีชื่อสกุล",
+  level: "ม.3"
+}, {
+  id: "2191",
+  name: "เด็กชายวรากร สกุณากลางไพร",
+  level: "ม.3"
+}, {
+  id: "2192",
+  name: "เด็กชายวีระศักดิ์ แซ่เท่า",
+  level: "ม.3"
+}, {
+  id: "2195",
+  name: "เด็กหญิงคำอุ่ง ไม่มีชื่อสกุล",
+  level: "ม.3"
+}, {
+  id: "2196",
+  name: "เด็กหญิงชญาพร หว่างไม",
+  level: "ม.3"
+}, {
+  id: "2197",
+  name: "เด็กหญิงณฤดี ดิแฮ",
+  level: "ม.3"
+}, {
+  id: "2198",
+  name: "เด็กหญิงนิชา ยงยศกุล",
+  level: "ม.3"
+}, {
+  id: "2199",
+  name: "เด็กหญิงบุณยาพร สุวรรณบริสุทธิ์",
+  level: "ม.3"
+}, {
+  id: "2200",
+  name: "เด็กหญิงยุวดี แซ่เห่อ",
+  level: "ม.3"
+}, {
+  id: "2201",
+  name: "เด็กหญิงวาเศรษฐี หว่างไม",
+  level: "ม.3"
+}, {
+  id: "2202",
+  name: "เด็กหญิงสิรารมณ์ กรองมาดี",
+  level: "ม.3"
+}, {
+  id: "2203",
+  name: "เด็กหญิงสิรินทิพย์ วีระสกุลไกล",
+  level: "ม.3"
+}, {
+  id: "2204",
+  name: "เด็กหญิงสุชาดา ยิ่งยศสุข",
+  level: "ม.3"
+}, {
+  id: "2205",
+  name: "เด็กหญิงแสงคำ ไม่มีชื่อสกุล",
+  level: "ม.3"
+}, {
+  id: "2206",
+  name: "เด็กหญิงเอื้องแซะ ธนพรศักดา",
+  level: "ม.3"
+}];
+
+// ── Storage helpers (window.storage → localStorage fallback) ──
+async function load(key) {
+  try {
+    const v = localStorage.getItem(key);
+    return v ? JSON.parse(v) : null;
+  } catch {
+    return null;
+  }
+}
+async function save(key, val) {
+  try {
+    localStorage.setItem(key, JSON.stringify(val));
+  } catch {}
+}
+
+// ── Main App ───────────────────────────────────────────────
+function App() {
+  const [role, setRole] = useState(null);
+  const [pinInput, setPinInput] = useState("");
+  const [pinErr, setPinErr] = useState(false);
+  const [students, setStudents] = useState([]);
+  const [scores, setScores] = useState([]);
+  const [templates, setTemplates] = useState({});
+  const [teacherPin, setTeacherPin] = useState(DEFAULT_PIN);
+  const [currentYear, setCurrentYear] = useState("2568");
+  const [currentTerm, setCurrentTerm] = useState("1");
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    (async () => {
+      const sts = await load("students_v2");
+      const scs = await load("scores_v2");
+      const tmpl = await load("templates_v1");
+      const tpin = await load("teacher_pin_v1");
+      setStudents(sts || DEMO_STUDENTS);
+      setScores(scs || []);
+      setTemplates(tmpl || {});
+      setTeacherPin(tpin || DEFAULT_PIN);
+      setLoaded(true);
+    })();
+  }, []);
+  const saveStudents = useCallback(async d => {
+    setStudents(d);
+    await save("students_v2", d);
+  }, []);
+  const saveScores = useCallback(async d => {
+    setScores(d);
+    await save("scores_v2", d);
+  }, []);
+  const saveTemplates = useCallback(async d => {
+    setTemplates(d);
+    await save("templates_v1", d);
+  }, []);
+  const savePin = useCallback(async d => {
+    setTeacherPin(d);
+    await save("teacher_pin_v1", d);
+  }, []);
+  if (!loaded) return /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      height: "100vh",
+      background: "#0f2744"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: "#60a5fa",
+      fontFamily: "sans-serif",
+      fontSize: 16
+    }
+  }, "\u0E01\u0E33\u0E25\u0E31\u0E07\u0E42\u0E2B\u0E25\u0E14..."));
+  if (!role) return /*#__PURE__*/React.createElement(Landing, {
+    onSelect: r => {
+      if (r === "student") {
+        setRole("student");
+        return;
+      }
+      setRole("pin");
+    }
+  });
+  if (role === "pin") return /*#__PURE__*/React.createElement(PinScreen, {
+    pin: pinInput,
+    setPin: setPinInput,
+    error: pinErr,
+    onSubmit: () => {
+      if (pinInput === teacherPin) {
+        setRole("teacher");
+        setPinErr(false);
+        setPinInput("");
+      } else {
+        setPinErr(true);
+        setPinInput("");
+      }
+    },
+    onBack: () => {
+      setRole(null);
+      setPinInput("");
+      setPinErr(false);
+    }
+  });
+  if (role === "student") return /*#__PURE__*/React.createElement(StudentView, {
+    students: students,
+    scores: scores,
+    currentYear: currentYear,
+    currentTerm: currentTerm,
+    onBack: () => setRole(null)
+  });
+  return /*#__PURE__*/React.createElement(TeacherView, {
+    students: students,
+    setStudents: saveStudents,
+    scores: scores,
+    setScores: saveScores,
+    templates: templates,
+    setTemplates: saveTemplates,
+    teacherPin: teacherPin,
+    setTeacherPin: savePin,
+    currentYear: currentYear,
+    setCurrentYear: setCurrentYear,
+    currentTerm: currentTerm,
+    setCurrentTerm: setCurrentTerm,
+    onBack: () => setRole(null)
+  });
+}
+
+// ── Landing ────────────────────────────────────────────────
+function Landing({
+  onSelect
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100vh",
+      background: "linear-gradient(160deg,#0a1628 0%,#0f2744 50%,#0d1f3c 100%)",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "32px 24px",
+      fontFamily: "'Sarabun',sans-serif"
+    }
+  }, /*#__PURE__*/React.createElement("style", null, `@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700;800&display=swap'); * { box-sizing: border-box; }`), /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 64,
+      height: 64,
+      background: "linear-gradient(135deg,#3b82f6,#1d4ed8)",
+      borderRadius: 18,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: 28,
+      boxShadow: "0 8px 32px rgba(59,130,246,0.4)",
+      marginBottom: 12
+    }
+  }, "\uD83C\uDF93"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: "center",
+      marginBottom: 6
+    }
+  }, /*#__PURE__*/React.createElement("h1", {
+    style: {
+      color: "#fff",
+      fontSize: 22,
+      fontWeight: 800,
+      margin: "0 0 4px",
+      letterSpacing: 0.3
+    }
+  }, "\u0E23\u0E30\u0E1A\u0E1A\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A\u0E1C\u0E25\u0E01\u0E32\u0E23\u0E40\u0E23\u0E35\u0E22\u0E19"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "#94a3b8",
+      fontSize: 13,
+      margin: 0
+    }
+  }, "\u0E27\u0E34\u0E0A\u0E32\u0E04\u0E2D\u0E21\u0E1E\u0E34\u0E27\u0E40\u0E15\u0E2D\u0E23\u0E4C \u2022 \u0E27\u0E34\u0E17\u0E22\u0E32\u0E01\u0E32\u0E23\u0E04\u0E33\u0E19\u0E27\u0E13 \u2022 \u0E2D\u0E2D\u0E01\u0E41\u0E1A\u0E1A\u0E41\u0E25\u0E30\u0E40\u0E17\u0E04\u0E42\u0E19\u0E42\u0E25\u0E22\u0E35"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "#64748b",
+      fontSize: 12,
+      marginTop: 3
+    }
+  }, "\u0E0A\u0E31\u0E49\u0E19 \u0E21.1\u20133  |  \u0E1B\u0E35\u0E01\u0E32\u0E23\u0E28\u0E36\u0E01\u0E29\u0E32 2568")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 12,
+      width: "100%",
+      maxWidth: 340
+    }
+  }, /*#__PURE__*/React.createElement(RoleCard, {
+    icon: "\uD83D\uDD0D",
+    title: "\u0E19\u0E31\u0E01\u0E40\u0E23\u0E35\u0E22\u0E19",
+    desc: "\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A\u0E04\u0E30\u0E41\u0E19\u0E19\u0E41\u0E25\u0E30\u0E40\u0E01\u0E23\u0E14\u0E02\u0E2D\u0E07\u0E15\u0E31\u0E27\u0E40\u0E2D\u0E07",
+    color: "#3b82f6",
+    onClick: () => onSelect("student")
+  }), /*#__PURE__*/React.createElement(RoleCard, {
+    icon: "\uD83D\uDCDD",
+    title: "\u0E04\u0E23\u0E39\u0E1C\u0E39\u0E49\u0E2A\u0E2D\u0E19",
+    desc: "\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E04\u0E30\u0E41\u0E19\u0E19\u0E41\u0E25\u0E30\u0E14\u0E39\u0E2A\u0E23\u0E38\u0E1B\u0E20\u0E32\u0E1E\u0E23\u0E27\u0E21",
+    color: "#0d9488",
+    onClick: () => onSelect("teacher")
+  })));
+}
+function RoleCard({
+  icon,
+  title,
+  desc,
+  color,
+  onClick
+}) {
+  const [hov, setHov] = useState(false);
+  return /*#__PURE__*/React.createElement("button", {
+    onClick: onClick,
+    onMouseEnter: () => setHov(true),
+    onMouseLeave: () => setHov(false),
+    style: {
+      background: hov ? "rgba(255,255,255,0.1)" : "rgba(255,255,255,0.06)",
+      border: `1.5px solid ${hov ? color : "rgba(255,255,255,0.12)"}`,
+      borderRadius: 16,
+      padding: "20px 24px",
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      gap: 16,
+      textAlign: "left",
+      transition: "all 0.2s",
+      transform: hov ? "translateY(-2px)" : "none",
+      boxShadow: hov ? `0 8px 24px rgba(0,0,0,0.3)` : "none",
+      fontFamily: "'Sarabun',sans-serif"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 48,
+      height: 48,
+      background: `${color}22`,
+      borderRadius: 12,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: 24,
+      flexShrink: 0
+    }
+  }, icon), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: "#fff",
+      fontWeight: 700,
+      fontSize: 18
+    }
+  }, title), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: "#94a3b8",
+      fontSize: 13,
+      marginTop: 3
+    }
+  }, desc)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginLeft: "auto",
+      color: color,
+      fontSize: 20
+    }
+  }, "\u203A"));
+}
+
+// ── Pin Screen ─────────────────────────────────────────────
+function PinScreen({
+  pin,
+  setPin,
+  error,
+  onSubmit,
+  onBack
+}) {
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100vh",
+      background: "linear-gradient(160deg,#0a1628,#0f2744)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 24,
+      fontFamily: "'Sarabun',sans-serif"
+    }
+  }, /*#__PURE__*/React.createElement("style", null, `@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap');`), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "rgba(255,255,255,0.06)",
+      border: "1px solid rgba(255,255,255,0.12)",
+      borderRadius: 20,
+      padding: "36px 32px",
+      width: "100%",
+      maxWidth: 340,
+      textAlign: "center"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 40,
+      marginBottom: 12
+    }
+  }, "\uD83D\uDD10"), /*#__PURE__*/React.createElement("h2", {
+    style: {
+      color: "#fff",
+      fontSize: 20,
+      fontWeight: 700,
+      marginBottom: 6
+    }
+  }, "\u0E23\u0E2B\u0E31\u0E2A\u0E1C\u0E48\u0E32\u0E19\u0E04\u0E23\u0E39"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "#94a3b8",
+      fontSize: 14,
+      marginBottom: 24
+    }
+  }, "\u0E1B\u0E49\u0E2D\u0E19\u0E23\u0E2B\u0E31\u0E2A PIN \u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E40\u0E02\u0E49\u0E32\u0E2A\u0E39\u0E48\u0E23\u0E30\u0E1A\u0E1A"), /*#__PURE__*/React.createElement("input", {
+    type: "password",
+    value: pin,
+    onChange: e => setPin(e.target.value),
+    onKeyDown: e => e.key === "Enter" && onSubmit(),
+    placeholder: "PIN 4 \u0E2B\u0E25\u0E31\u0E01",
+    style: {
+      width: "100%",
+      background: "rgba(255,255,255,0.08)",
+      border: `1.5px solid ${error ? "#f87171" : "rgba(255,255,255,0.15)"}`,
+      borderRadius: 10,
+      padding: "12px 16px",
+      color: "#fff",
+      fontSize: 18,
+      textAlign: "center",
+      letterSpacing: 8,
+      fontFamily: "monospace",
+      outline: "none",
+      marginBottom: 8
+    }
+  }), error && /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "#f87171",
+      fontSize: 13,
+      marginBottom: 8
+    }
+  }, "PIN \u0E44\u0E21\u0E48\u0E16\u0E39\u0E01\u0E15\u0E49\u0E2D\u0E07 \u0E25\u0E2D\u0E07\u0E43\u0E2B\u0E21\u0E48\u0E2D\u0E35\u0E01\u0E04\u0E23\u0E31\u0E49\u0E07"), /*#__PURE__*/React.createElement("button", {
+    onClick: onSubmit,
+    style: {
+      width: "100%",
+      background: "linear-gradient(135deg,#3b82f6,#1d4ed8)",
+      border: "none",
+      borderRadius: 10,
+      padding: "12px",
+      color: "#fff",
+      fontSize: 16,
+      fontWeight: 700,
+      cursor: "pointer",
+      marginBottom: 12,
+      fontFamily: "'Sarabun',sans-serif"
+    }
+  }, "\u0E40\u0E02\u0E49\u0E32\u0E2A\u0E39\u0E48\u0E23\u0E30\u0E1A\u0E1A"), /*#__PURE__*/React.createElement("button", {
+    onClick: onBack,
+    style: {
+      background: "none",
+      border: "none",
+      color: "#64748b",
+      fontSize: 14,
+      cursor: "pointer",
+      fontFamily: "'Sarabun',sans-serif"
+    }
+  }, "\u2190 \u0E22\u0E49\u0E2D\u0E19\u0E01\u0E25\u0E31\u0E1A"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "#334155",
+      fontSize: 12,
+      marginTop: 16
+    }
+  }, "PIN \u0E40\u0E23\u0E34\u0E48\u0E21\u0E15\u0E49\u0E19: 1234")));
+}
+
+// ── Student View ───────────────────────────────────────────
+function StudentView({
+  students,
+  scores,
+  currentYear,
+  currentTerm,
+  onBack
+}) {
+  const [query, setQuery] = useState("");
+  const [found, setFound] = useState(null);
+  const [searched, setSearched] = useState(false);
+  const [viewYear, setViewYear] = useState(currentYear);
+  const [viewTerm, setViewTerm] = useState(currentTerm);
+  const search = () => {
+    const q = query.trim().toLowerCase();
+    if (!q) return;
+    const st = students.find(s => s.id === q || s.name.toLowerCase().includes(q));
+    setFound(st || null);
+    setSearched(true);
+  };
+  const getScores = studentId => scores.filter(s => s.studentId === studentId && s.year === viewYear && s.term === viewTerm);
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100vh",
+      background: "#f8fafc",
+      fontFamily: "'Sarabun',sans-serif"
+    }
+  }, /*#__PURE__*/React.createElement("style", null, `@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700;800&display=swap');`), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "linear-gradient(135deg,#0f2744,#1a56db)",
+      padding: "20px 24px",
+      color: "#fff"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onBack,
+    style: {
+      background: "rgba(255,255,255,0.15)",
+      border: "none",
+      color: "#fff",
+      borderRadius: 8,
+      padding: "6px 14px",
+      cursor: "pointer",
+      fontSize: 13,
+      fontFamily: "'Sarabun',sans-serif",
+      marginBottom: 16
+    }
+  }, "\u2190 \u0E01\u0E25\u0E31\u0E1A"), /*#__PURE__*/React.createElement("h1", {
+    style: {
+      fontSize: 22,
+      fontWeight: 800,
+      margin: "0 0 4px"
+    }
+  }, "\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A\u0E1C\u0E25\u0E01\u0E32\u0E23\u0E40\u0E23\u0E35\u0E22\u0E19"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "rgba(255,255,255,0.7)",
+      fontSize: 14,
+      margin: "0 0 12px"
+    }
+  }, "\u0E20\u0E32\u0E04\u0E40\u0E23\u0E35\u0E22\u0E19\u0E17\u0E35\u0E48 ", viewTerm, " \u0E1B\u0E35\u0E01\u0E32\u0E23\u0E28\u0E36\u0E01\u0E29\u0E32 ", viewYear), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      flexWrap: "wrap",
+      alignItems: "center"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "rgba(255,255,255,0.6)",
+      fontSize: 13
+    }
+  }, "\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E20\u0E32\u0E04\u0E40\u0E23\u0E35\u0E22\u0E19:"), TERMS.map(t => /*#__PURE__*/React.createElement("button", {
+    key: t,
+    onClick: () => {
+      setViewTerm(t);
+      setFound(null);
+      setSearched(false);
+    },
+    style: {
+      padding: "4px 14px",
+      borderRadius: 8,
+      border: `1.5px solid ${viewTerm === t ? "#fff" : "rgba(255,255,255,0.25)"}`,
+      background: viewTerm === t ? "#fff" : "transparent",
+      color: viewTerm === t ? "#0f2744" : "#fff",
+      fontSize: 13,
+      fontWeight: viewTerm === t ? 700 : 400,
+      cursor: "pointer",
+      fontFamily: "'Sarabun',sans-serif"
+    }
+  }, "\u0E20\u0E32\u0E04 ", t)), YEARS.map(y => /*#__PURE__*/React.createElement("button", {
+    key: y,
+    onClick: () => {
+      setViewYear(y);
+      setFound(null);
+      setSearched(false);
+    },
+    style: {
+      padding: "4px 14px",
+      borderRadius: 8,
+      border: `1.5px solid ${viewYear === y ? "#fbbf24" : "rgba(255,255,255,0.25)"}`,
+      background: viewYear === y ? "#fbbf24" : "transparent",
+      color: viewYear === y ? "#0f2744" : "#fff",
+      fontSize: 13,
+      fontWeight: viewYear === y ? 700 : 400,
+      cursor: "pointer",
+      fontFamily: "'Sarabun',sans-serif"
+    }
+  }, y)))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 640,
+      margin: "0 auto",
+      padding: "24px 16px 48px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 20,
+      boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "#374151",
+      fontWeight: 600,
+      fontSize: 15,
+      marginBottom: 12
+    }
+  }, "\uD83D\uDD0D \u0E04\u0E49\u0E19\u0E2B\u0E32\u0E14\u0E49\u0E27\u0E22\u0E0A\u0E37\u0E48\u0E2D\u0E2B\u0E23\u0E37\u0E2D\u0E23\u0E2B\u0E31\u0E2A\u0E19\u0E31\u0E01\u0E40\u0E23\u0E35\u0E22\u0E19"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    value: query,
+    onChange: e => setQuery(e.target.value),
+    onKeyDown: e => e.key === "Enter" && search(),
+    placeholder: "\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E0A\u0E37\u0E48\u0E2D \u0E2B\u0E23\u0E37\u0E2D\u0E23\u0E2B\u0E31\u0E2A\u0E19\u0E31\u0E01\u0E40\u0E23\u0E35\u0E22\u0E19...",
+    style: {
+      flex: 1,
+      border: "1.5px solid #e2e8f0",
+      borderRadius: 10,
+      padding: "11px 14px",
+      fontSize: 15,
+      fontFamily: "'Sarabun',sans-serif",
+      outline: "none",
+      color: "#1e293b"
+    }
+  }), /*#__PURE__*/React.createElement("button", {
+    onClick: search,
+    style: {
+      background: "#1a56db",
+      border: "none",
+      borderRadius: 10,
+      padding: "0 20px",
+      color: "#fff",
+      fontSize: 15,
+      fontWeight: 700,
+      cursor: "pointer",
+      fontFamily: "'Sarabun',sans-serif"
+    }
+  }, "\u0E04\u0E49\u0E19\u0E2B\u0E32"))), searched && !found && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 32,
+      textAlign: "center",
+      boxShadow: "0 2px 12px rgba(0,0,0,0.06)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 48,
+      marginBottom: 12
+    }
+  }, "\uD83D\uDD0E"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "#64748b",
+      fontSize: 16
+    }
+  }, "\u0E44\u0E21\u0E48\u0E1E\u0E1A\u0E19\u0E31\u0E01\u0E40\u0E23\u0E35\u0E22\u0E19 \u0E01\u0E23\u0E38\u0E13\u0E32\u0E15\u0E23\u0E27\u0E08\u0E2A\u0E2D\u0E1A\u0E0A\u0E37\u0E48\u0E2D\u0E2B\u0E23\u0E37\u0E2D\u0E23\u0E2B\u0E31\u0E2A\u0E2D\u0E35\u0E01\u0E04\u0E23\u0E31\u0E49\u0E07")), found && (() => {
+    const myScores = getScores(found.id);
+    const hasScores = myScores.length > 0;
+    return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: "linear-gradient(135deg,#1a56db,#0d9488)",
+        borderRadius: 16,
+        padding: "20px 24px",
+        color: "#fff",
+        marginBottom: 16,
+        boxShadow: "0 4px 20px rgba(26,86,219,0.3)"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 16
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 56,
+        height: 56,
+        background: "rgba(255,255,255,0.2)",
+        borderRadius: 14,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 28
+      }
+    }, "\uD83D\uDC64"), /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 20,
+        fontWeight: 800
+      }
+    }, found.name), /*#__PURE__*/React.createElement("div", {
+      style: {
+        color: "rgba(255,255,255,0.8)",
+        fontSize: 14,
+        marginTop: 3
+      }
+    }, "\u0E23\u0E2B\u0E31\u0E2A ", found.id, "  |  \u0E0A\u0E31\u0E49\u0E19 ", found.level)))), !hasScores ? /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: "#fff",
+        borderRadius: 16,
+        padding: 28,
+        textAlign: "center",
+        boxShadow: "0 2px 12px rgba(0,0,0,0.06)"
+      }
+    }, /*#__PURE__*/React.createElement("p", {
+      style: {
+        color: "#94a3b8",
+        fontSize: 15
+      }
+    }, "\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E21\u0E35\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E04\u0E30\u0E41\u0E19\u0E19\u0E43\u0E19\u0E20\u0E32\u0E04\u0E40\u0E23\u0E35\u0E22\u0E19\u0E19\u0E35\u0E49")) : /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        flexDirection: "column",
+        gap: 12
+      }
+    }, myScores.map((sc, i) => {
+      const total = (Number(sc.collect) || 0) + (Number(sc.exam) || 0);
+      const grade = calcGrade(total);
+      const gc = gradeColor(grade);
+      return /*#__PURE__*/React.createElement("div", {
+        key: i,
+        style: {
+          background: "#fff",
+          borderRadius: 16,
+          overflow: "hidden",
+          boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+          border: `1.5px solid ${gc.border}`
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          background: gc.bg,
+          padding: "12px 20px",
+          borderBottom: `1px solid ${gc.border}`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between"
+        }
+      }, /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontWeight: 700,
+          fontSize: 16,
+          color: gc.text
+        }
+      }, "\uD83D\uDCDA ", sc.subject), (() => {
+        const ps = scoreStatus(sc);
+        return ps ? /*#__PURE__*/React.createElement("span", {
+          style: {
+            background: ps.bg,
+            border: `1px solid ${ps.border}`,
+            color: ps.color,
+            borderRadius: 20,
+            padding: "3px 12px",
+            fontSize: 12,
+            fontWeight: 700
+          }
+        }, "\u23F3 ", ps.label) : null;
+      })()), /*#__PURE__*/React.createElement("div", {
+        style: {
+          padding: "16px 20px"
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr 1fr",
+          gap: 12,
+          marginBottom: 16
+        }
+      }, /*#__PURE__*/React.createElement(ScoreBox, {
+        label: "\u0E04\u0E30\u0E41\u0E19\u0E19\u0E40\u0E01\u0E47\u0E1A",
+        value: sc.collect,
+        max: sc.maxCollect || 60,
+        pending: String(sc.collect) === "" || sc.collect === null
+      }), /*#__PURE__*/React.createElement(ScoreBox, {
+        label: "\u0E04\u0E30\u0E41\u0E19\u0E19\u0E2A\u0E2D\u0E1A",
+        value: sc.exam,
+        max: sc.maxExam || 40,
+        pending: String(sc.exam) === "" || sc.exam === null
+      }), /*#__PURE__*/React.createElement(ScoreBox, {
+        label: "\u0E04\u0E30\u0E41\u0E19\u0E19\u0E23\u0E27\u0E21",
+        value: total,
+        max: 100,
+        bold: true
+      })), sc.subScores && sc.subScores.length > 0 && /*#__PURE__*/React.createElement("div", {
+        style: {
+          marginBottom: 14
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        style: {
+          fontSize: 12,
+          color: "#64748b",
+          fontWeight: 600,
+          marginBottom: 6
+        }
+      }, "\u0E23\u0E32\u0E22\u0E25\u0E30\u0E40\u0E2D\u0E35\u0E22\u0E14\u0E04\u0E30\u0E41\u0E19\u0E19\u0E40\u0E01\u0E47\u0E1A"), /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: "flex",
+          flexDirection: "column",
+          gap: 5
+        }
+      }, sc.subScores.map((sub, si) => {
+        const pct = sub.max > 0 ? Math.min(100, (Number(sub.value) || 0) / Number(sub.max) * 100) : 0;
+        const isPending = sub.value === "" || sub.value === null || sub.value === undefined;
+        return /*#__PURE__*/React.createElement("div", {
+          key: si,
+          style: {
+            display: "flex",
+            alignItems: "center",
+            gap: 10
+          }
+        }, /*#__PURE__*/React.createElement("div", {
+          style: {
+            fontSize: 12,
+            color: "#374151",
+            minWidth: 0,
+            flex: "0 0 auto",
+            maxWidth: 160,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis"
+          }
+        }, sub.label || `รายการ ${si + 1}`), /*#__PURE__*/React.createElement("div", {
+          style: {
+            flex: 1,
+            height: 8,
+            background: "#f1f5f9",
+            borderRadius: 4,
+            overflow: "hidden"
+          }
+        }, /*#__PURE__*/React.createElement("div", {
+          style: {
+            height: "100%",
+            width: `${pct}%`,
+            background: isPending ? "#fde68a" : pct >= 80 ? "#3b82f6" : pct >= 50 ? "#10b981" : "#f87171",
+            borderRadius: 4,
+            transition: "width 0.4s"
+          }
+        })), /*#__PURE__*/React.createElement("div", {
+          style: {
+            fontSize: 12,
+            fontWeight: 700,
+            color: isPending ? "#d97706" : "#1e293b",
+            minWidth: 52,
+            textAlign: "right"
+          }
+        }, isPending ? "รอผล" : `${sub.value}/${sub.max}`));
+      }))), /*#__PURE__*/React.createElement("div", {
+        style: {
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between"
+        }
+      }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 13,
+          color: "#64748b"
+        }
+      }, "\u0E40\u0E01\u0E23\u0E14"), /*#__PURE__*/React.createElement("span", {
+        style: {
+          fontSize: 32,
+          fontWeight: 800,
+          color: gc.text,
+          marginLeft: 10
+        }
+      }, grade)), (() => {
+        const ps = scoreStatus(sc);
+        return ps ? /*#__PURE__*/React.createElement("div", {
+          style: {
+            background: ps.bg,
+            border: `1.5px solid ${ps.border}`,
+            borderRadius: 10,
+            padding: "8px 18px"
+          }
+        }, /*#__PURE__*/React.createElement("span", {
+          style: {
+            fontSize: 14,
+            fontWeight: 700,
+            color: ps.color
+          }
+        }, "\u23F3 ", ps.label)) : /*#__PURE__*/React.createElement("div", {
+          style: {
+            background: gc.bg,
+            border: `1.5px solid ${gc.border}`,
+            borderRadius: 10,
+            padding: "8px 18px"
+          }
+        }, /*#__PURE__*/React.createElement("span", {
+          style: {
+            fontSize: 15,
+            fontWeight: 700,
+            color: gc.text
+          }
+        }, grade === "0" ? "❌ ไม่ผ่าน" : "✅ ผ่าน"));
+      })())));
+    })));
+  })()), /*#__PURE__*/React.createElement("div", {
+    style: {
+      borderTop: "1px solid #e2e8f0",
+      padding: "20px 16px",
+      textAlign: "center",
+      background: "#f8fafc"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#94a3b8",
+      lineHeight: 1.9
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 700,
+      color: "#64748b",
+      fontSize: 13
+    }
+  }, "\uD83D\uDC69\u200D\uD83C\uDFEB \u0E04\u0E23\u0E39\u0E28\u0E38\u0E17\u0E18\u0E34\u0E21\u0E13\u0E11\u0E19\u0E4C\u0E23\u0E0A\u0E0E  \u0E44\u0E1E\u0E42\u0E23\u0E08\u0E19\u0E4C"), /*#__PURE__*/React.createElement("div", null, "\u0E01\u0E25\u0E38\u0E48\u0E21\u0E2A\u0E32\u0E23\u0E30\u0E01\u0E32\u0E23\u0E40\u0E23\u0E35\u0E22\u0E19\u0E23\u0E39\u0E49\u0E27\u0E34\u0E17\u0E22\u0E32\u0E28\u0E32\u0E2A\u0E15\u0E23\u0E4C\u0E41\u0E25\u0E30\u0E40\u0E17\u0E04\u0E42\u0E19\u0E42\u0E25\u0E22\u0E35  \u0E42\u0E23\u0E07\u0E40\u0E23\u0E35\u0E22\u0E19\u0E1B\u0E48\u0E32\u0E25\u0E32\u0E19"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      color: "#cbd5e1",
+      fontSize: 11,
+      marginTop: 2
+    }
+  }, "\xA9 2026 \xB7 \u0E2A\u0E07\u0E27\u0E19\u0E25\u0E34\u0E02\u0E2A\u0E34\u0E17\u0E18\u0E34\u0E4C"))));
+}
+function ScoreBox({
+  label,
+  value,
+  max,
+  bold,
+  pending
+}) {
+  const pct = max > 0 ? Math.min(100, (Number(value) || 0) / max * 100) : 0;
+  if (pending) return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fffbeb",
+      borderRadius: 10,
+      padding: "10px 12px",
+      textAlign: "center",
+      border: "1.5px dashed #fde68a"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#92400e",
+      marginBottom: 4,
+      fontWeight: 600
+    }
+  }, label), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 15,
+      fontWeight: 700,
+      color: "#d97706"
+    }
+  }, "\u0E23\u0E2D\u0E1C\u0E25"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: "#fbbf24"
+    }
+  }, "/", max), /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 4,
+      background: "#fef3c7",
+      borderRadius: 2,
+      marginTop: 6
+    }
+  }));
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#f8fafc",
+      borderRadius: 10,
+      padding: "10px 12px",
+      textAlign: "center"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#64748b",
+      marginBottom: 4
+    }
+  }, label), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: bold ? 22 : 18,
+      fontWeight: bold ? 800 : 700,
+      color: "#1e293b"
+    }
+  }, value ?? "-"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: "#94a3b8"
+    }
+  }, "/", max), /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: 4,
+      background: "#e2e8f0",
+      borderRadius: 2,
+      marginTop: 6
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      height: "100%",
+      width: `${pct}%`,
+      background: pct >= 80 ? "#3b82f6" : pct >= 50 ? "#10b981" : "#f87171",
+      borderRadius: 2,
+      transition: "width 0.5s"
+    }
+  })));
+}
+
+// ── Teacher View ───────────────────────────────────────────
+function TeacherView({
+  students,
+  setStudents,
+  scores,
+  setScores,
+  templates,
+  setTemplates,
+  teacherPin,
+  setTeacherPin,
+  currentYear,
+  setCurrentYear,
+  currentTerm,
+  setCurrentTerm,
+  onBack
+}) {
+  const [tab, setTab] = useState("score");
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      minHeight: "100vh",
+      background: "#f1f5f9",
+      fontFamily: "'Sarabun',sans-serif"
+    }
+  }, /*#__PURE__*/React.createElement("style", null, `@import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700;800&display=swap'); * { box-sizing:border-box; }`), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "linear-gradient(135deg,#0f2744,#0d9488)",
+      padding: "18px 24px",
+      color: "#fff",
+      display: "flex",
+      alignItems: "center",
+      gap: 16
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: onBack,
+    style: {
+      background: "rgba(255,255,255,0.15)",
+      border: "none",
+      color: "#fff",
+      borderRadius: 8,
+      padding: "6px 14px",
+      cursor: "pointer",
+      fontSize: 13,
+      fontFamily: "'Sarabun',sans-serif"
+    }
+  }, "\u2190 \u0E2D\u0E2D\u0E01"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("h1", {
+    style: {
+      fontSize: 19,
+      fontWeight: 800,
+      margin: 0
+    }
+  }, "\u0E23\u0E30\u0E1A\u0E1A\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E04\u0E30\u0E41\u0E19\u0E19 \u2014 \u0E04\u0E23\u0E39\u0E1C\u0E39\u0E49\u0E2A\u0E2D\u0E19"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "rgba(255,255,255,0.7)",
+      fontSize: 13,
+      margin: 0
+    }
+  }, "\u0E20\u0E32\u0E04\u0E40\u0E23\u0E35\u0E22\u0E19 ", currentTerm, "/", currentYear)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 6,
+      flexWrap: "wrap"
+    }
+  }, TERMS.map(t => /*#__PURE__*/React.createElement("button", {
+    key: t,
+    onClick: () => setCurrentTerm(t),
+    style: {
+      padding: "4px 12px",
+      borderRadius: 8,
+      border: `1.5px solid ${currentTerm === t ? "#fff" : "rgba(255,255,255,0.25)"}`,
+      background: currentTerm === t ? "#fff" : "transparent",
+      color: currentTerm === t ? "#0f2744" : "#fff",
+      fontSize: 13,
+      fontWeight: currentTerm === t ? 700 : 400,
+      cursor: "pointer",
+      fontFamily: "'Sarabun',sans-serif"
+    }
+  }, "\u0E20\u0E32\u0E04 ", t)), YEARS.map(y => /*#__PURE__*/React.createElement("button", {
+    key: y,
+    onClick: () => setCurrentYear(y),
+    style: {
+      padding: "4px 12px",
+      borderRadius: 8,
+      border: `1.5px solid ${currentYear === y ? "#fbbf24" : "rgba(255,255,255,0.25)"}`,
+      background: currentYear === y ? "#fbbf24" : "transparent",
+      color: currentYear === y ? "#0f2744" : "#fff",
+      fontSize: 13,
+      fontWeight: currentYear === y ? 700 : 400,
+      cursor: "pointer",
+      fontFamily: "'Sarabun',sans-serif"
+    }
+  }, y)))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderBottom: "1px solid #e2e8f0",
+      display: "flex",
+      padding: "0 20px",
+      overflowX: "auto"
+    }
+  }, [["score", "📝 บันทึกคะแนน"], ["templates", "📋 ตัวชี้วัด/ภาระงาน"], ["students", "👥 รายชื่อนักเรียน"], ["dashboard", "📊 Dashboard"], ["settings", "⚙️ ตั้งค่า"]].map(([key, label]) => /*#__PURE__*/React.createElement("button", {
+    key: key,
+    onClick: () => setTab(key),
+    style: {
+      background: "none",
+      border: "none",
+      borderBottom: tab === key ? "3px solid #1a56db" : "3px solid transparent",
+      color: tab === key ? "#1a56db" : "#64748b",
+      fontWeight: tab === key ? 700 : 400,
+      fontSize: 14,
+      padding: "14px 18px",
+      cursor: "pointer",
+      fontFamily: "'Sarabun',sans-serif",
+      whiteSpace: "nowrap"
+    }
+  }, label))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 960,
+      margin: "0 auto",
+      padding: "20px 16px"
+    }
+  }, tab === "score" && /*#__PURE__*/React.createElement(ScoreInput, {
+    students: students,
+    scores: scores,
+    setScores: setScores,
+    templates: templates,
+    currentYear: currentYear,
+    currentTerm: currentTerm
+  }), tab === "templates" && /*#__PURE__*/React.createElement(TemplateManager, {
+    templates: templates,
+    setTemplates: setTemplates
+  }), tab === "students" && /*#__PURE__*/React.createElement(StudentManager, {
+    students: students,
+    setStudents: setStudents,
+    scores: scores,
+    currentYear: currentYear,
+    currentTerm: currentTerm
+  }), tab === "dashboard" && /*#__PURE__*/React.createElement(Dashboard, {
+    students: students,
+    scores: scores,
+    currentYear: currentYear,
+    currentTerm: currentTerm
+  }), tab === "settings" && /*#__PURE__*/React.createElement(Settings, {
+    teacherPin: teacherPin,
+    setTeacherPin: setTeacherPin
+  })));
+}
+
+// ── Score Input ────────────────────────────────────────────
+const DEFAULT_SUB = [{
+  label: "คะแนนเก็บรวม",
+  max: 60,
+  value: ""
+}];
+function ScoreInput({
+  students,
+  scores,
+  setScores,
+  templates,
+  currentYear,
+  currentTerm
+}) {
+  const [level, setLevel] = useState("");
+  const [form, setForm] = useState({
+    studentId: "",
+    subject: "",
+    exam: "",
+    maxExam: 40
+  });
+  const [subScores, setSubScores] = useState(DEFAULT_SUB);
+  const [saved, setSaved] = useState(false);
+  const filteredStudents = level ? students.filter(s => s.level === level) : [];
+  const selectedStudent = students.find(s => s.id === form.studentId);
+  const subjectsForStudent = selectedStudent ? ALL_SUBJECTS.filter(s => s.includes(selectedStudent.level)) : [];
+
+  // เมื่อเลือกวิชา → โหลด template (ถ้ามี)
+  const handleSubjectChange = subject => {
+    const tmpl = templates[subject];
+    if (tmpl && tmpl.items && tmpl.items.length > 0) {
+      setSubScores(tmpl.items.map(t => ({
+        label: t.label,
+        max: t.max,
+        value: ""
+      })));
+      setForm(f => ({
+        ...f,
+        subject,
+        maxExam: tmpl.maxExam || 40
+      }));
+    } else {
+      setSubScores(DEFAULT_SUB);
+      setForm(f => ({
+        ...f,
+        subject
+      }));
+    }
+  };
+
+  // รวมคะแนนเก็บจาก sub-scores
+  const collectTotal = subScores.reduce((a, s) => a + (Number(s.value) || 0), 0);
+  const maxCollectTotal = subScores.reduce((a, s) => a + (Number(s.max) || 0), 0);
+  const examVal = Number(form.exam) || 0;
+  const grandTotal = collectTotal + examVal;
+  const examErr = form.exam !== "" && (examVal < 0 || examVal > form.maxExam);
+  const subErrors = subScores.map(s => s.value !== "" && (Number(s.value) < 0 || Number(s.value) > Number(s.max)));
+  const hasErr = examErr || subErrors.some(Boolean);
+  const canSave = form.studentId && form.subject && !hasErr;
+  const addSub = () => setSubScores([...subScores, {
+    label: "",
+    max: 10,
+    value: ""
+  }]);
+  const removeSub = i => setSubScores(subScores.filter((_, idx) => idx !== i));
+  const updateSub = (i, key, val) => setSubScores(subScores.map((s, idx) => idx === i ? {
+    ...s,
+    [key]: val
+  } : s));
+  const handleSave = () => {
+    if (!canSave) return;
+    // สร้าง sc.collect = ผลรวม sub-scores (หรือ "" ถ้ายังไม่กรอก)
+    const collectVal = subScores.every(s => s.value === "") ? "" : String(collectTotal);
+    const entry = {
+      studentId: form.studentId,
+      subject: form.subject,
+      collect: collectVal,
+      exam: form.exam,
+      maxCollect: maxCollectTotal,
+      maxExam: form.maxExam,
+      subScores: subScores.map(s => ({
+        ...s
+      })),
+      year: currentYear,
+      term: currentTerm
+    };
+    let ns = [...scores];
+    const idx = ns.findIndex(s => s.studentId === form.studentId && s.subject === form.subject && s.year === currentYear && s.term === currentTerm);
+    if (idx >= 0) ns[idx] = entry;else ns.push(entry);
+    setScores(ns);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+  const loadEdit = sc => {
+    const st = students.find(s => s.id === sc.studentId);
+    if (st) setLevel(st.level);
+    setForm({
+      studentId: sc.studentId,
+      subject: sc.subject,
+      exam: sc.exam,
+      maxExam: sc.maxExam || 40
+    });
+    setSubScores(sc.subScores && sc.subScores.length > 0 ? sc.subScores : DEFAULT_SUB);
+  };
+  const deleteScore = sc => {
+    setScores(scores.filter(s => !(s.studentId === sc.studentId && s.subject === sc.subject && s.year === sc.year && s.term === sc.term)));
+  };
+  const currentTermScores = scores.filter(s => s.year === currentYear && s.term === currentTerm);
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: 20,
+      alignItems: "start"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 24,
+      boxShadow: "0 2px 12px rgba(0,0,0,0.06)"
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      fontSize: 16,
+      fontWeight: 700,
+      color: "#0f2744",
+      marginBottom: 20
+    }
+  }, "\uD83D\uDCDD \u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01 / \u0E41\u0E01\u0E49\u0E44\u0E02\u0E04\u0E30\u0E41\u0E19\u0E19"), /*#__PURE__*/React.createElement(Label, null, "1. \u0E40\u0E25\u0E37\u0E2D\u0E01\u0E23\u0E30\u0E14\u0E31\u0E1A\u0E0A\u0E31\u0E49\u0E19"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 16
+    }
+  }, LEVELS.map(lv => /*#__PURE__*/React.createElement("button", {
+    key: lv,
+    onClick: () => {
+      setLevel(lv);
+      setForm(f => ({
+        ...f,
+        studentId: "",
+        subject: ""
+      }));
+    },
+    style: {
+      flex: 1,
+      padding: "10px 0",
+      borderRadius: 10,
+      border: `2px solid ${level === lv ? "#1a56db" : "#e2e8f0"}`,
+      background: level === lv ? "#eff6ff" : "#f8fafc",
+      color: level === lv ? "#1a56db" : "#64748b",
+      fontWeight: level === lv ? 700 : 400,
+      fontSize: 15,
+      cursor: "pointer",
+      fontFamily: "'Sarabun',sans-serif",
+      transition: "all 0.15s"
+    }
+  }, lv))), level ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Label, null, "2. \u0E40\u0E25\u0E37\u0E2D\u0E01\u0E19\u0E31\u0E01\u0E40\u0E23\u0E35\u0E22\u0E19 (", filteredStudents.length, " \u0E04\u0E19)"), /*#__PURE__*/React.createElement("select", {
+    value: form.studentId,
+    onChange: e => setForm({
+      ...form,
+      studentId: e.target.value,
+      subject: ""
+    }),
+    style: selectStyle
+  }, /*#__PURE__*/React.createElement("option", {
+    value: ""
+  }, "\u2014 \u0E40\u0E25\u0E37\u0E2D\u0E01\u0E19\u0E31\u0E01\u0E40\u0E23\u0E35\u0E22\u0E19 ", level, " \u2014"), filteredStudents.map(s => /*#__PURE__*/React.createElement("option", {
+    key: s.id,
+    value: s.id
+  }, s.name))), /*#__PURE__*/React.createElement(Label, null, "3. \u0E40\u0E25\u0E37\u0E2D\u0E01\u0E23\u0E32\u0E22\u0E27\u0E34\u0E0A\u0E32"), /*#__PURE__*/React.createElement("select", {
+    value: form.subject,
+    onChange: e => handleSubjectChange(e.target.value),
+    style: {
+      ...selectStyle,
+      opacity: !form.studentId ? 0.5 : 1
+    },
+    disabled: !form.studentId
+  }, /*#__PURE__*/React.createElement("option", {
+    value: ""
+  }, "\u2014 \u0E40\u0E25\u0E37\u0E2D\u0E01\u0E27\u0E34\u0E0A\u0E32 \u2014"), subjectsForStudent.map(s => /*#__PURE__*/React.createElement("option", {
+    key: s,
+    value: s
+  }, s))), form.subject && templates[form.subject]?.items?.length > 0 && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#f0fdf4",
+      border: "1px solid #86efac",
+      borderRadius: 8,
+      padding: "6px 12px",
+      fontSize: 12,
+      color: "#166534",
+      marginBottom: 8
+    }
+  }, "\u2705 \u0E42\u0E2B\u0E25\u0E14\u0E15\u0E31\u0E27\u0E0A\u0E35\u0E49\u0E27\u0E31\u0E14/\u0E20\u0E32\u0E23\u0E30\u0E07\u0E32\u0E19 ", templates[form.subject].items.length, " \u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E08\u0E32\u0E01\u0E40\u0E17\u0E21\u0E40\u0E1E\u0E25\u0E15\u0E41\u0E25\u0E49\u0E27")) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#f8fafc",
+      border: "1.5px dashed #e2e8f0",
+      borderRadius: 12,
+      padding: 18,
+      textAlign: "center",
+      marginBottom: 12
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "#94a3b8",
+      fontSize: 14,
+      margin: 0
+    }
+  }, "\uD83D\uDC46 \u0E40\u0E25\u0E37\u0E2D\u0E01\u0E23\u0E30\u0E14\u0E31\u0E1A\u0E0A\u0E31\u0E49\u0E19\u0E01\u0E48\u0E2D\u0E19")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 4,
+      marginBottom: 4
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 8
+    }
+  }, /*#__PURE__*/React.createElement(Label, null, "4. \u0E04\u0E30\u0E41\u0E19\u0E19\u0E40\u0E01\u0E47\u0E1A ", form.subject && templates[form.subject]?.items?.length > 0 ? "(จากเทมเพลต)" : "— แยกตามตัวชี้วัด"), /*#__PURE__*/React.createElement("button", {
+    onClick: addSub,
+    style: {
+      background: "#eff6ff",
+      border: "1px solid #bfdbfe",
+      color: "#1a56db",
+      borderRadius: 8,
+      padding: "4px 12px",
+      fontSize: 12,
+      fontWeight: 700,
+      cursor: "pointer",
+      fontFamily: "'Sarabun',sans-serif"
+    }
+  }, "+ \u0E40\u0E1E\u0E34\u0E48\u0E21\u0E0A\u0E48\u0E2D\u0E07")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 8
+    }
+  }, subScores.map((s, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      background: "#f8fafc",
+      borderRadius: 10,
+      padding: "10px 12px",
+      border: "1px solid #e2e8f0"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      marginBottom: 6,
+      alignItems: "center"
+    }
+  }, /*#__PURE__*/React.createElement("input", {
+    value: s.label,
+    onChange: e => updateSub(i, "label", e.target.value),
+    placeholder: `เช่น ตัวชี้วัดที่ ${i + 1}, ชิ้นงาน ${i + 1}`,
+    style: {
+      flex: 1,
+      border: "1.5px solid #e2e8f0",
+      borderRadius: 7,
+      padding: "6px 10px",
+      fontSize: 13,
+      fontFamily: "'Sarabun',sans-serif",
+      outline: "none",
+      color: "#1e293b"
+    }
+  }), subScores.length > 1 && /*#__PURE__*/React.createElement("button", {
+    onClick: () => removeSub(i),
+    style: {
+      background: "#fee2e2",
+      border: "none",
+      borderRadius: 7,
+      padding: "6px 10px",
+      fontSize: 12,
+      cursor: "pointer",
+      color: "#dc2626",
+      fontFamily: "'Sarabun',sans-serif",
+      flexShrink: 0
+    }
+  }, "\u2715")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 8,
+      alignItems: "center"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: "#94a3b8",
+      marginBottom: 3
+    }
+  }, "\u0E04\u0E30\u0E41\u0E19\u0E19\u0E2A\u0E39\u0E07\u0E2A\u0E38\u0E14"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    value: s.max,
+    onChange: e => updateSub(i, "max", e.target.value),
+    style: {
+      width: "100%",
+      border: "1.5px solid #e2e8f0",
+      borderRadius: 7,
+      padding: "6px 10px",
+      fontSize: 14,
+      fontFamily: "'Sarabun',sans-serif",
+      outline: "none",
+      color: "#1e293b"
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 11,
+      color: "#94a3b8",
+      marginBottom: 3
+    }
+  }, "\u0E04\u0E30\u0E41\u0E19\u0E19\u0E17\u0E35\u0E48\u0E44\u0E14\u0E49"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    value: s.value,
+    onChange: e => updateSub(i, "value", e.target.value),
+    placeholder: "\u2014",
+    style: {
+      width: "100%",
+      border: `1.5px solid ${subErrors[i] ? "#f87171" : "#e2e8f0"}`,
+      borderRadius: 7,
+      padding: "6px 10px",
+      fontSize: 14,
+      fontFamily: "'Sarabun',sans-serif",
+      outline: "none",
+      color: "#1e293b"
+    }
+  }), subErrors[i] && /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      color: "#f87171"
+    }
+  }, "\u0E40\u0E01\u0E34\u0E19 ", s.max)))))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#eff6ff",
+      border: "1px solid #bfdbfe",
+      borderRadius: 10,
+      padding: "8px 14px",
+      marginTop: 8,
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      color: "#1e40af",
+      fontWeight: 600
+    }
+  }, "\u0E23\u0E27\u0E21\u0E04\u0E30\u0E41\u0E19\u0E19\u0E40\u0E01\u0E47\u0E1A"), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 16,
+      fontWeight: 800,
+      color: "#1a56db"
+    }
+  }, collectTotal, " / ", maxCollectTotal))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 12
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement(Label, null, "5. \u0E04\u0E30\u0E41\u0E19\u0E19\u0E2A\u0E39\u0E07\u0E2A\u0E38\u0E14 (\u0E2A\u0E2D\u0E1A)"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    value: form.maxExam,
+    onChange: e => setForm({
+      ...form,
+      maxExam: Number(e.target.value)
+    }),
+    style: inputStyle
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      flex: 1
+    }
+  }, /*#__PURE__*/React.createElement(Label, null, "\u0E04\u0E30\u0E41\u0E19\u0E19\u0E2A\u0E2D\u0E1A (0\u2013", form.maxExam, ")"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    value: form.exam,
+    onChange: e => setForm({
+      ...form,
+      exam: e.target.value
+    }),
+    style: {
+      ...inputStyle,
+      borderColor: examErr ? "#f87171" : "#e2e8f0"
+    },
+    placeholder: "\u2014"
+  }), examErr && /*#__PURE__*/React.createElement("span", {
+    style: {
+      color: "#f87171",
+      fontSize: 12
+    }
+  }, "\u0E40\u0E01\u0E34\u0E19\u0E01\u0E33\u0E2B\u0E19\u0E14")))), (collectTotal > 0 || examVal > 0) && (() => {
+    const g = calcGrade(grandTotal);
+    const gc = gradeColor(g);
+    return /*#__PURE__*/React.createElement("div", {
+      style: {
+        background: gc.bg,
+        border: `1.5px solid ${gc.border}`,
+        borderRadius: 12,
+        padding: "12px 16px",
+        marginTop: 12,
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center"
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 14,
+        color: gc.text
+      }
+    }, "\u0E04\u0E30\u0E41\u0E19\u0E19\u0E23\u0E27\u0E21 ", /*#__PURE__*/React.createElement("strong", null, grandTotal, " / ", maxCollectTotal + Number(form.maxExam))), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 20,
+        fontWeight: 800,
+        color: gc.text
+      }
+    }, "\u0E40\u0E01\u0E23\u0E14 ", g), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: 13,
+        color: gc.text
+      }
+    }, g === "0" ? "ไม่ผ่าน" : "ผ่าน"));
+  })(), /*#__PURE__*/React.createElement("button", {
+    onClick: handleSave,
+    disabled: !canSave,
+    style: {
+      width: "100%",
+      marginTop: 14,
+      background: !canSave ? "#e2e8f0" : "linear-gradient(135deg,#1a56db,#0d9488)",
+      border: "none",
+      borderRadius: 10,
+      padding: 13,
+      color: !canSave ? "#94a3b8" : "#fff",
+      fontSize: 16,
+      fontWeight: 700,
+      cursor: !canSave ? "not-allowed" : "pointer",
+      fontFamily: "'Sarabun',sans-serif",
+      transition: "all 0.2s"
+    }
+  }, saved ? "✅ บันทึกแล้ว!" : "💾 บันทึกคะแนน")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 24,
+      boxShadow: "0 2px 12px rgba(0,0,0,0.06)"
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      fontSize: 16,
+      fontWeight: 700,
+      color: "#0f2744",
+      marginBottom: 16
+    }
+  }, "\uD83D\uDCCB \u0E04\u0E30\u0E41\u0E19\u0E19\u0E17\u0E35\u0E48\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E41\u0E25\u0E49\u0E27 (", currentTermScores.length, " \u0E23\u0E32\u0E22\u0E01\u0E32\u0E23)"), currentTermScores.length === 0 ? /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "#94a3b8",
+      textAlign: "center",
+      padding: 20
+    }
+  }, "\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E21\u0E35\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 8,
+      maxHeight: 560,
+      overflowY: "auto"
+    }
+  }, currentTermScores.map((sc, i) => {
+    const st = students.find(s => s.id === sc.studentId);
+    const total = (Number(sc.collect) || 0) + (Number(sc.exam) || 0);
+    const g = calcGrade(total);
+    const gc = gradeColor(g);
+    const hasSubs = sc.subScores && sc.subScores.length > 0;
+    return /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: {
+        background: "#f8fafc",
+        borderRadius: 12,
+        border: `1px solid ${gc.border}`,
+        overflow: "hidden"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        padding: "10px 14px",
+        display: "flex",
+        alignItems: "center",
+        gap: 10
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1,
+        minWidth: 0
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        fontWeight: 700,
+        color: "#1e293b",
+        whiteSpace: "nowrap",
+        overflow: "hidden",
+        textOverflow: "ellipsis"
+      }
+    }, st?.name || sc.studentId), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: "#64748b",
+        display: "flex",
+        alignItems: "center",
+        gap: 6,
+        flexWrap: "wrap"
+      }
+    }, sc.subject, " | ", /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "#94a3b8"
+      }
+    }, st?.level), (() => {
+      const ps = scoreStatus(sc);
+      return ps ? /*#__PURE__*/React.createElement("span", {
+        style: {
+          background: ps.bg,
+          border: `1px solid ${ps.border}`,
+          color: ps.color,
+          borderRadius: 10,
+          padding: "1px 8px",
+          fontSize: 11,
+          fontWeight: 700
+        }
+      }, "\u23F3 ", ps.label) : null;
+    })()), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: "#94a3b8"
+      }
+    }, "\u0E40\u0E01\u0E47\u0E1A ", sc.collect === "" || sc.collect === null ? "—" : sc.collect, "/", sc.maxCollect || 60, " + \u0E2A\u0E2D\u0E1A ", sc.exam === "" || sc.exam === null ? "—" : sc.exam, "/", sc.maxExam || 40, " = ", total)), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 18,
+        fontWeight: 800,
+        color: gc.text,
+        minWidth: 28,
+        textAlign: "center"
+      }
+    }, g), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 6
+      }
+    }, /*#__PURE__*/React.createElement("button", {
+      onClick: () => loadEdit(sc),
+      style: {
+        background: "#dbeafe",
+        border: "none",
+        borderRadius: 6,
+        padding: "4px 10px",
+        fontSize: 12,
+        cursor: "pointer",
+        color: "#1e40af",
+        fontFamily: "'Sarabun',sans-serif"
+      }
+    }, "\u0E41\u0E01\u0E49\u0E44\u0E02"), /*#__PURE__*/React.createElement("button", {
+      onClick: () => deleteScore(sc),
+      style: {
+        background: "#fee2e2",
+        border: "none",
+        borderRadius: 6,
+        padding: "4px 10px",
+        fontSize: 12,
+        cursor: "pointer",
+        color: "#dc2626",
+        fontFamily: "'Sarabun',sans-serif"
+      }
+    }, "\u0E25\u0E1A"))), hasSubs && /*#__PURE__*/React.createElement("div", {
+      style: {
+        borderTop: "1px solid #e2e8f0",
+        padding: "8px 14px",
+        background: "#fff",
+        display: "flex",
+        flexWrap: "wrap",
+        gap: 6
+      }
+    }, sc.subScores.map((sub, si) => /*#__PURE__*/React.createElement("div", {
+      key: si,
+      style: {
+        background: "#f1f5f9",
+        borderRadius: 8,
+        padding: "4px 10px",
+        fontSize: 12
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "#64748b"
+      }
+    }, sub.label || `รายการ ${si + 1}`, ": "), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontWeight: 700,
+        color: sub.value === "" ? "#d97706" : "#1e293b"
+      }
+    }, sub.value === "" ? "รอผล" : sub.value), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "#94a3b8"
+      }
+    }, "/", sub.max)))));
+  }))));
+}
+
+// ── Student Manager ────────────────────────────────────────
+function StudentManager({
+  students,
+  setStudents,
+  scores,
+  currentYear,
+  currentTerm
+}) {
+  const [form, setForm] = useState({
+    id: "",
+    name: "",
+    level: "ม.1"
+  });
+  const [msg, setMsg] = useState("");
+  const addStudent = () => {
+    if (!form.id || !form.name) return;
+    if (students.find(s => s.id === form.id)) {
+      setMsg("❌ รหัสนี้มีอยู่แล้ว");
+      return;
+    }
+    setStudents([...students, {
+      ...form
+    }]);
+    setForm({
+      id: "",
+      name: "",
+      level: "ม.1"
+    });
+    setMsg("✅ เพิ่มนักเรียนแล้ว");
+    setTimeout(() => setMsg(""), 2000);
+  };
+  const removeStudent = id => {
+    setStudents(students.filter(s => s.id !== id));
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "320px 1fr",
+      gap: 20,
+      alignItems: "start"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 24,
+      boxShadow: "0 2px 12px rgba(0,0,0,0.06)"
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      fontSize: 16,
+      fontWeight: 700,
+      color: "#0f2744",
+      marginBottom: 20
+    }
+  }, "\u2795 \u0E40\u0E1E\u0E34\u0E48\u0E21\u0E19\u0E31\u0E01\u0E40\u0E23\u0E35\u0E22\u0E19"), /*#__PURE__*/React.createElement(Label, null, "\u0E23\u0E2B\u0E31\u0E2A\u0E19\u0E31\u0E01\u0E40\u0E23\u0E35\u0E22\u0E19"), /*#__PURE__*/React.createElement("input", {
+    value: form.id,
+    onChange: e => setForm({
+      ...form,
+      id: e.target.value
+    }),
+    placeholder: "\u0E40\u0E0A\u0E48\u0E19 10001",
+    style: inputStyle
+  }), /*#__PURE__*/React.createElement(Label, null, "\u0E0A\u0E37\u0E48\u0E2D\u2013\u0E2A\u0E01\u0E38\u0E25"), /*#__PURE__*/React.createElement("input", {
+    value: form.name,
+    onChange: e => setForm({
+      ...form,
+      name: e.target.value
+    }),
+    placeholder: "\u0E0A\u0E37\u0E48\u0E2D \u0E2A\u0E01\u0E38\u0E25",
+    style: inputStyle
+  }), /*#__PURE__*/React.createElement(Label, null, "\u0E23\u0E30\u0E14\u0E31\u0E1A\u0E0A\u0E31\u0E49\u0E19"), /*#__PURE__*/React.createElement("select", {
+    value: form.level,
+    onChange: e => setForm({
+      ...form,
+      level: e.target.value
+    }),
+    style: selectStyle
+  }, LEVELS.map(l => /*#__PURE__*/React.createElement("option", {
+    key: l,
+    value: l
+  }, l))), msg && /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 13,
+      color: msg.startsWith("✅") ? "#16a34a" : "#dc2626",
+      margin: "8px 0"
+    }
+  }, msg), /*#__PURE__*/React.createElement("button", {
+    onClick: addStudent,
+    style: {
+      width: "100%",
+      marginTop: 8,
+      background: "linear-gradient(135deg,#0f2744,#1a56db)",
+      border: "none",
+      borderRadius: 10,
+      padding: "12px",
+      color: "#fff",
+      fontSize: 15,
+      fontWeight: 700,
+      cursor: "pointer",
+      fontFamily: "'Sarabun',sans-serif"
+    }
+  }, "\u0E40\u0E1E\u0E34\u0E48\u0E21\u0E19\u0E31\u0E01\u0E40\u0E23\u0E35\u0E22\u0E19"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 12,
+      color: "#94a3b8",
+      marginTop: 12,
+      textAlign: "center"
+    }
+  }, "\u0E23\u0E32\u0E22\u0E0A\u0E37\u0E48\u0E2D ", students.length, " \u0E04\u0E19")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 24,
+      boxShadow: "0 2px 12px rgba(0,0,0,0.06)"
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      fontSize: 16,
+      fontWeight: 700,
+      color: "#0f2744",
+      marginBottom: 16
+    }
+  }, "\uD83D\uDC65 \u0E23\u0E32\u0E22\u0E0A\u0E37\u0E48\u0E2D\u0E19\u0E31\u0E01\u0E40\u0E23\u0E35\u0E22\u0E19\u0E17\u0E31\u0E49\u0E07\u0E2B\u0E21\u0E14"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 8,
+      maxHeight: 500,
+      overflowY: "auto"
+    }
+  }, students.map(s => {
+    const sc = scores.filter(sc => sc.studentId === s.id && sc.year === currentYear && sc.term === currentTerm);
+    return /*#__PURE__*/React.createElement("div", {
+      key: s.id,
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "10px 14px",
+        background: "#f8fafc",
+        borderRadius: 10,
+        border: "1px solid #e2e8f0"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        width: 36,
+        height: 36,
+        background: "#dbeafe",
+        borderRadius: 10,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 16
+      }
+    }, "\uD83D\uDC64"), /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 14,
+        fontWeight: 700,
+        color: "#1e293b"
+      }
+    }, s.name), /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 12,
+        color: "#64748b"
+      }
+    }, "\u0E23\u0E2B\u0E31\u0E2A ", s.id, "  |  ", s.level, "  |  \u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E41\u0E25\u0E49\u0E27 ", sc.length, " \u0E27\u0E34\u0E0A\u0E32")), /*#__PURE__*/React.createElement("button", {
+      onClick: () => removeStudent(s.id),
+      style: {
+        background: "#fee2e2",
+        border: "none",
+        borderRadius: 7,
+        padding: "5px 12px",
+        fontSize: 12,
+        cursor: "pointer",
+        color: "#dc2626",
+        fontFamily: "'Sarabun',sans-serif"
+      }
+    }, "\u0E25\u0E1A"));
+  }))));
+}
+
+// ── Template Manager ──────────────────────────────────────
+function TemplateManager({
+  templates,
+  setTemplates
+}) {
+  const [selSubject, setSelSubject] = useState("");
+  const [items, setItems] = useState([]);
+  const [maxExam, setMaxExam] = useState(40);
+  const [saved, setSaved] = useState(false);
+  const loadTemplate = subj => {
+    setSelSubject(subj);
+    const t = templates[subj];
+    if (t) {
+      setItems(t.items || []);
+      setMaxExam(t.maxExam || 40);
+    } else {
+      setItems([{
+        label: "",
+        max: 10
+      }]);
+      setMaxExam(40);
+    }
+  };
+  const addItem = () => setItems([...items, {
+    label: "",
+    max: 10
+  }]);
+  const removeItem = i => setItems(items.filter((_, idx) => idx !== i));
+  const updateItem = (i, key, val) => setItems(items.map((it, idx) => idx === i ? {
+    ...it,
+    [key]: val
+  } : it));
+  const handleSave = () => {
+    if (!selSubject) return;
+    const next = {
+      ...templates,
+      [selSubject]: {
+        items: items.map(it => ({
+          ...it
+        })),
+        maxExam: Number(maxExam)
+      }
+    };
+    setTemplates(next);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+  const handleDelete = () => {
+    if (!selSubject) return;
+    const next = {
+      ...templates
+    };
+    delete next[selSubject];
+    setTemplates(next);
+    setItems([{
+      label: "",
+      max: 10
+    }]);
+    setSaved(false);
+  };
+  const totalMax = items.reduce((a, it) => a + (Number(it.max) || 0), 0);
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "280px 1fr",
+      gap: 20,
+      alignItems: "start"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 20,
+      boxShadow: "0 2px 12px rgba(0,0,0,0.06)"
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      fontSize: 15,
+      fontWeight: 700,
+      color: "#0f2744",
+      marginBottom: 14
+    }
+  }, "\uD83D\uDCCB \u0E40\u0E25\u0E37\u0E2D\u0E01\u0E27\u0E34\u0E0A\u0E32\u0E17\u0E35\u0E48\u0E15\u0E49\u0E2D\u0E07\u0E01\u0E32\u0E23\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 6
+    }
+  }, ALL_SUBJECTS.map(subj => {
+    const hasTmpl = templates[subj]?.items?.length > 0;
+    return /*#__PURE__*/React.createElement("button", {
+      key: subj,
+      onClick: () => loadTemplate(subj),
+      style: {
+        textAlign: "left",
+        padding: "10px 14px",
+        borderRadius: 10,
+        border: `1.5px solid ${selSubject === subj ? "#1a56db" : "#e2e8f0"}`,
+        background: selSubject === subj ? "#eff6ff" : "#f8fafc",
+        cursor: "pointer",
+        fontFamily: "'Sarabun',sans-serif",
+        fontSize: 13,
+        color: selSubject === subj ? "#1a56db" : "#374151",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center"
+      }
+    }, /*#__PURE__*/React.createElement("span", null, subj), hasTmpl && /*#__PURE__*/React.createElement("span", {
+      style: {
+        background: "#d1fae5",
+        color: "#065f46",
+        borderRadius: 6,
+        padding: "2px 8px",
+        fontSize: 11,
+        fontWeight: 700
+      }
+    }, templates[subj].items.length, " \u0E23\u0E32\u0E22\u0E01\u0E32\u0E23"));
+  }))), selSubject ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 24,
+      boxShadow: "0 2px 12px rgba(0,0,0,0.06)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 20
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      fontSize: 15,
+      fontWeight: 700,
+      color: "#0f2744",
+      margin: 0
+    }
+  }, "\u2699\uFE0F \u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32\u0E15\u0E31\u0E27\u0E0A\u0E35\u0E49\u0E27\u0E31\u0E14 / \u0E20\u0E32\u0E23\u0E30\u0E07\u0E32\u0E19 \u2014 ", selSubject), /*#__PURE__*/React.createElement("button", {
+    onClick: handleDelete,
+    style: {
+      background: "#fee2e2",
+      border: "none",
+      borderRadius: 8,
+      padding: "6px 14px",
+      fontSize: 12,
+      cursor: "pointer",
+      color: "#dc2626",
+      fontFamily: "'Sarabun',sans-serif"
+    }
+  }, "\uD83D\uDDD1 \u0E25\u0E1A\u0E40\u0E17\u0E21\u0E40\u0E1E\u0E25\u0E15")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#f8fafc",
+      borderRadius: 10,
+      padding: "10px 14px",
+      marginBottom: 16,
+      fontSize: 13,
+      color: "#64748b"
+    }
+  }, "\uD83D\uDCA1 \u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32\u0E17\u0E35\u0E48\u0E19\u0E35\u0E48\u0E04\u0E23\u0E31\u0E49\u0E07\u0E40\u0E14\u0E35\u0E22\u0E27 \u0E40\u0E21\u0E37\u0E48\u0E2D\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E04\u0E30\u0E41\u0E19\u0E19\u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E27\u0E34\u0E0A\u0E32\u0E19\u0E35\u0E49\u0E08\u0E30\u0E42\u0E2B\u0E25\u0E14\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E43\u0E2B\u0E49\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 10,
+      marginBottom: 14
+    }
+  }, items.map((it, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      display: "flex",
+      gap: 10,
+      alignItems: "center",
+      background: "#f8fafc",
+      borderRadius: 10,
+      padding: "10px 12px",
+      border: "1px solid #e2e8f0"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: 24,
+      height: 24,
+      background: "#1a56db",
+      borderRadius: 6,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      color: "#fff",
+      fontSize: 12,
+      fontWeight: 700,
+      flexShrink: 0
+    }
+  }, i + 1), /*#__PURE__*/React.createElement("input", {
+    value: it.label,
+    onChange: e => updateItem(i, "label", e.target.value),
+    placeholder: `ตัวชี้วัดที่ ${i + 1} หรือชื่อภาระงาน`,
+    style: {
+      flex: 1,
+      border: "1.5px solid #e2e8f0",
+      borderRadius: 8,
+      padding: "8px 12px",
+      fontSize: 14,
+      fontFamily: "'Sarabun',sans-serif",
+      outline: "none",
+      color: "#1e293b"
+    }
+  }), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
+      flexShrink: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 12,
+      color: "#94a3b8"
+    }
+  }, "\u0E04\u0E30\u0E41\u0E19\u0E19"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    value: it.max,
+    onChange: e => updateItem(i, "max", e.target.value),
+    style: {
+      width: 60,
+      border: "1.5px solid #e2e8f0",
+      borderRadius: 8,
+      padding: "8px 10px",
+      fontSize: 14,
+      fontFamily: "'Sarabun',sans-serif",
+      outline: "none",
+      color: "#1e293b",
+      textAlign: "center"
+    }
+  })), items.length > 1 && /*#__PURE__*/React.createElement("button", {
+    onClick: () => removeItem(i),
+    style: {
+      background: "#fee2e2",
+      border: "none",
+      borderRadius: 7,
+      padding: "6px 10px",
+      fontSize: 12,
+      cursor: "pointer",
+      color: "#dc2626",
+      flexShrink: 0,
+      fontFamily: "'Sarabun',sans-serif"
+    }
+  }, "\u2715")))), /*#__PURE__*/React.createElement("button", {
+    onClick: addItem,
+    style: {
+      width: "100%",
+      background: "#f0f9ff",
+      border: "1.5px dashed #7dd3fc",
+      borderRadius: 10,
+      padding: "10px",
+      color: "#0284c7",
+      fontSize: 14,
+      fontWeight: 700,
+      cursor: "pointer",
+      fontFamily: "'Sarabun',sans-serif",
+      marginBottom: 14
+    }
+  }, "+ \u0E40\u0E1E\u0E34\u0E48\u0E21\u0E15\u0E31\u0E27\u0E0A\u0E35\u0E49\u0E27\u0E31\u0E14 / \u0E20\u0E32\u0E23\u0E30\u0E07\u0E32\u0E19"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: 12,
+      marginBottom: 14
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#eff6ff",
+      border: "1px solid #bfdbfe",
+      borderRadius: 10,
+      padding: "12px 16px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#1e40af",
+      marginBottom: 4
+    }
+  }, "\u0E23\u0E27\u0E21\u0E04\u0E30\u0E41\u0E19\u0E19\u0E40\u0E01\u0E47\u0E1A"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 22,
+      fontWeight: 800,
+      color: "#1a56db"
+    }
+  }, totalMax, " \u0E04\u0E30\u0E41\u0E19\u0E19")), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#f0fdfa",
+      border: "1px solid #99f6e4",
+      borderRadius: 10,
+      padding: "12px 16px"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: "#065f46",
+      marginBottom: 4
+    }
+  }, "\u0E04\u0E30\u0E41\u0E19\u0E19\u0E2A\u0E2D\u0E1A\u0E2A\u0E39\u0E07\u0E2A\u0E38\u0E14"), /*#__PURE__*/React.createElement("input", {
+    type: "number",
+    value: maxExam,
+    onChange: e => setMaxExam(e.target.value),
+    style: {
+      width: "100%",
+      border: "none",
+      background: "transparent",
+      fontSize: 22,
+      fontWeight: 800,
+      color: "#0d9488",
+      fontFamily: "'Sarabun',sans-serif",
+      outline: "none"
+    }
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#f8fafc",
+      border: "1px solid #e2e8f0",
+      borderRadius: 10,
+      padding: "10px 14px",
+      marginBottom: 14,
+      fontSize: 13,
+      color: "#374151"
+    }
+  }, "\u0E04\u0E30\u0E41\u0E19\u0E19\u0E23\u0E27\u0E21\u0E17\u0E31\u0E49\u0E07\u0E2B\u0E21\u0E14: ", /*#__PURE__*/React.createElement("strong", null, totalMax + Number(maxExam), " \u0E04\u0E30\u0E41\u0E19\u0E19"), " (\u0E40\u0E01\u0E47\u0E1A ", totalMax, " + \u0E2A\u0E2D\u0E1A ", maxExam, ")"), /*#__PURE__*/React.createElement("button", {
+    onClick: handleSave,
+    style: {
+      width: "100%",
+      background: "linear-gradient(135deg,#1a56db,#0d9488)",
+      border: "none",
+      borderRadius: 10,
+      padding: 13,
+      color: "#fff",
+      fontSize: 16,
+      fontWeight: 700,
+      cursor: "pointer",
+      fontFamily: "'Sarabun',sans-serif"
+    }
+  }, saved ? "✅ บันทึกเทมเพลตแล้ว!" : "💾 บันทึกเทมเพลต")) : /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 40,
+      textAlign: "center",
+      boxShadow: "0 2px 12px rgba(0,0,0,0.06)"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 48,
+      marginBottom: 12
+    }
+  }, "\uD83D\uDCCB"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "#94a3b8",
+      fontSize: 15
+    }
+  }, "\u0E40\u0E25\u0E37\u0E2D\u0E01\u0E27\u0E34\u0E0A\u0E32\u0E17\u0E32\u0E07\u0E0B\u0E49\u0E32\u0E22\u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32\u0E15\u0E31\u0E27\u0E0A\u0E35\u0E49\u0E27\u0E31\u0E14 / \u0E20\u0E32\u0E23\u0E30\u0E07\u0E32\u0E19"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "#cbd5e1",
+      fontSize: 13
+    }
+  }, "\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32\u0E41\u0E25\u0E49\u0E27 \u0E23\u0E30\u0E1A\u0E1A\u0E08\u0E30\u0E42\u0E2B\u0E25\u0E14\u0E23\u0E32\u0E22\u0E01\u0E32\u0E23\u0E43\u0E2B\u0E49\u0E2D\u0E31\u0E15\u0E42\u0E19\u0E21\u0E31\u0E15\u0E34\u0E15\u0E2D\u0E19\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E04\u0E30\u0E41\u0E19\u0E19")));
+}
+
+// ── Settings ───────────────────────────────────────────────
+function Settings({
+  teacherPin,
+  setTeacherPin
+}) {
+  const [oldPin, setOldPin] = useState("");
+  const [newPin, setNewPin] = useState("");
+  const [newPin2, setNewPin2] = useState("");
+  const [msg, setMsg] = useState(null); // {type:"ok"|"err", text}
+
+  const handleChange = () => {
+    if (oldPin !== teacherPin) {
+      setMsg({
+        type: "err",
+        text: "❌ รหัสเดิมไม่ถูกต้อง"
+      });
+      return;
+    }
+    if (newPin.length < 4) {
+      setMsg({
+        type: "err",
+        text: "❌ รหัสใหม่ต้องมีอย่างน้อย 4 ตัวอักษร"
+      });
+      return;
+    }
+    if (newPin !== newPin2) {
+      setMsg({
+        type: "err",
+        text: "❌ รหัสใหม่ทั้งสองช่องไม่ตรงกัน"
+      });
+      return;
+    }
+    setTeacherPin(newPin);
+    setOldPin("");
+    setNewPin("");
+    setNewPin2("");
+    setMsg({
+      type: "ok",
+      text: "✅ เปลี่ยนรหัสผ่านสำเร็จ"
+    });
+    setTimeout(() => setMsg(null), 3000);
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    style: {
+      maxWidth: 440,
+      margin: "0 auto"
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 28,
+      boxShadow: "0 2px 12px rgba(0,0,0,0.06)"
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      fontSize: 16,
+      fontWeight: 700,
+      color: "#0f2744",
+      marginBottom: 6
+    }
+  }, "\uD83D\uDD10 \u0E40\u0E1B\u0E25\u0E35\u0E48\u0E22\u0E19\u0E23\u0E2B\u0E31\u0E2A\u0E1C\u0E48\u0E32\u0E19\u0E04\u0E23\u0E39"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "#64748b",
+      fontSize: 13,
+      marginBottom: 20
+    }
+  }, "\u0E23\u0E2B\u0E31\u0E2A\u0E1C\u0E48\u0E32\u0E19\u0E43\u0E0A\u0E49\u0E2A\u0E33\u0E2B\u0E23\u0E31\u0E1A\u0E40\u0E02\u0E49\u0E32\u0E2A\u0E39\u0E48\u0E42\u0E2B\u0E21\u0E14\u0E04\u0E23\u0E39\u0E1C\u0E39\u0E49\u0E2A\u0E2D\u0E19"), /*#__PURE__*/React.createElement(Label, null, "\u0E23\u0E2B\u0E31\u0E2A\u0E40\u0E14\u0E34\u0E21"), /*#__PURE__*/React.createElement("input", {
+    type: "password",
+    value: oldPin,
+    onChange: e => setOldPin(e.target.value),
+    placeholder: "\u0E23\u0E2B\u0E31\u0E2A\u0E1C\u0E48\u0E32\u0E19\u0E1B\u0E31\u0E08\u0E08\u0E38\u0E1A\u0E31\u0E19",
+    style: {
+      ...inputStyle,
+      letterSpacing: 4,
+      fontFamily: "monospace"
+    }
+  }), /*#__PURE__*/React.createElement(Label, null, "\u0E23\u0E2B\u0E31\u0E2A\u0E43\u0E2B\u0E21\u0E48"), /*#__PURE__*/React.createElement("input", {
+    type: "password",
+    value: newPin,
+    onChange: e => setNewPin(e.target.value),
+    placeholder: "\u0E23\u0E2B\u0E31\u0E2A\u0E43\u0E2B\u0E21\u0E48 (\u0E2D\u0E22\u0E48\u0E32\u0E07\u0E19\u0E49\u0E2D\u0E22 4 \u0E15\u0E31\u0E27\u0E2D\u0E31\u0E01\u0E29\u0E23)",
+    style: {
+      ...inputStyle,
+      letterSpacing: 4,
+      fontFamily: "monospace"
+    }
+  }), /*#__PURE__*/React.createElement(Label, null, "\u0E22\u0E37\u0E19\u0E22\u0E31\u0E19\u0E23\u0E2B\u0E31\u0E2A\u0E43\u0E2B\u0E21\u0E48"), /*#__PURE__*/React.createElement("input", {
+    type: "password",
+    value: newPin2,
+    onChange: e => setNewPin2(e.target.value),
+    placeholder: "\u0E1E\u0E34\u0E21\u0E1E\u0E4C\u0E23\u0E2B\u0E31\u0E2A\u0E43\u0E2B\u0E21\u0E48\u0E2D\u0E35\u0E01\u0E04\u0E23\u0E31\u0E49\u0E07",
+    style: {
+      ...inputStyle,
+      borderColor: newPin2 && newPin !== newPin2 ? "#f87171" : "#e2e8f0",
+      letterSpacing: 4,
+      fontFamily: "monospace"
+    }
+  }), newPin2 && newPin !== newPin2 && /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "#f87171",
+      fontSize: 12,
+      marginTop: -8,
+      marginBottom: 8
+    }
+  }, "\u0E23\u0E2B\u0E31\u0E2A\u0E44\u0E21\u0E48\u0E15\u0E23\u0E07\u0E01\u0E31\u0E19"), msg && /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: msg.type === "ok" ? "#f0fdf4" : "#fef2f2",
+      border: `1px solid ${msg.type === "ok" ? "#86efac" : "#fca5a5"}`,
+      borderRadius: 10,
+      padding: "10px 14px",
+      marginBottom: 12,
+      fontSize: 13,
+      fontWeight: 600,
+      color: msg.type === "ok" ? "#166534" : "#dc2626"
+    }
+  }, msg.text), /*#__PURE__*/React.createElement("button", {
+    onClick: handleChange,
+    style: {
+      width: "100%",
+      background: "linear-gradient(135deg,#0f2744,#1a56db)",
+      border: "none",
+      borderRadius: 10,
+      padding: 13,
+      color: "#fff",
+      fontSize: 16,
+      fontWeight: 700,
+      cursor: "pointer",
+      fontFamily: "'Sarabun',sans-serif"
+    }
+  }, "\u0E40\u0E1B\u0E25\u0E35\u0E48\u0E22\u0E19\u0E23\u0E2B\u0E31\u0E2A\u0E1C\u0E48\u0E32\u0E19"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 20,
+      padding: "12px 16px",
+      background: "#fffbeb",
+      border: "1px solid #fde68a",
+      borderRadius: 10
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 12,
+      color: "#92400e",
+      margin: 0
+    }
+  }, "\u26A0\uFE0F \u0E2B\u0E21\u0E32\u0E22\u0E40\u0E2B\u0E15\u0E38: \u0E23\u0E2B\u0E31\u0E2A\u0E1C\u0E48\u0E32\u0E19\u0E16\u0E39\u0E01\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E43\u0E19\u0E2D\u0E38\u0E1B\u0E01\u0E23\u0E13\u0E4C\u0E19\u0E35\u0E49 \u0E16\u0E49\u0E32\u0E25\u0E49\u0E32\u0E07\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E40\u0E1A\u0E23\u0E32\u0E27\u0E4C\u0E40\u0E0B\u0E2D\u0E23\u0E4C \u0E23\u0E2B\u0E31\u0E2A\u0E08\u0E30\u0E01\u0E25\u0E31\u0E1A\u0E40\u0E1B\u0E47\u0E19\u0E04\u0E48\u0E32\u0E40\u0E23\u0E34\u0E48\u0E21\u0E15\u0E49\u0E19 ", /*#__PURE__*/React.createElement("strong", null, "1234")))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 28,
+      boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
+      marginTop: 0
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      fontSize: 16,
+      fontWeight: 700,
+      color: "#0f2744",
+      marginBottom: 6
+    }
+  }, "\uD83D\uDCBE \u0E2A\u0E33\u0E23\u0E2D\u0E07\u0E41\u0E25\u0E30\u0E01\u0E39\u0E49\u0E04\u0E37\u0E19\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25"), /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "#64748b",
+      fontSize: 13,
+      marginBottom: 20
+    }
+  }, "Export \u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E01\u0E48\u0E2D\u0E19\u0E2D\u0E31\u0E1B\u0E40\u0E14\u0E15\u0E23\u0E30\u0E1A\u0E1A \u0E41\u0E25\u0E49\u0E27 Import \u0E01\u0E25\u0E31\u0E1A\u0E2B\u0E25\u0E31\u0E07\u0E2D\u0E31\u0E1B\u0E40\u0E14\u0E15"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 12
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    onClick: () => {
+      const data = {
+        students: JSON.parse(localStorage.getItem("students_v2") || "null"),
+        scores: JSON.parse(localStorage.getItem("scores_v2") || "null"),
+        templates: JSON.parse(localStorage.getItem("templates_v1") || "null"),
+        pin: localStorage.getItem("teacher_pin_v1"),
+        exportedAt: new Date().toLocaleString("th-TH")
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], {
+        type: "application/json"
+      });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "grade_backup_" + new Date().toISOString().slice(0, 10) + ".json";
+      a.click();
+    },
+    style: {
+      background: "linear-gradient(135deg,#0f2744,#1a56db)",
+      border: "none",
+      borderRadius: 10,
+      padding: "13px",
+      color: "#fff",
+      fontSize: 15,
+      fontWeight: 700,
+      cursor: "pointer",
+      fontFamily: "'Sarabun',sans-serif"
+    }
+  }, "\uD83D\uDCE4 Export \u2014 \u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E25\u0E07\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07"), /*#__PURE__*/React.createElement("label", {
+    style: {
+      background: "#f0fdf4",
+      border: "2px dashed #86efac",
+      borderRadius: 10,
+      padding: "13px",
+      color: "#166534",
+      fontSize: 15,
+      fontWeight: 700,
+      cursor: "pointer",
+      fontFamily: "'Sarabun',sans-serif",
+      textAlign: "center"
+    }
+  }, "\uD83D\uDCE5 Import \u2014 \u0E01\u0E39\u0E49\u0E04\u0E37\u0E19\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E08\u0E32\u0E01\u0E44\u0E1F\u0E25\u0E4C", /*#__PURE__*/React.createElement("input", {
+    type: "file",
+    accept: ".json",
+    style: {
+      display: "none"
+    },
+    onChange: e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        try {
+          const data = JSON.parse(ev.target.result);
+          if (data.students) localStorage.setItem("students_v2", JSON.stringify(data.students));
+          if (data.scores) localStorage.setItem("scores_v2", JSON.stringify(data.scores));
+          if (data.templates) localStorage.setItem("templates_v1", JSON.stringify(data.templates));
+          if (data.pin) localStorage.setItem("teacher_pin_v1", data.pin);
+          alert("✅ Import สำเร็จ! กด OK แล้วรีเฟรชหน้า");
+          window.location.reload();
+        } catch {
+          alert("❌ ไฟล์ไม่ถูกต้อง กรุณาใช้ไฟล์ที่ Export จากระบบนี้เท่านั้น");
+        }
+      };
+      reader.readAsText(file);
+    }
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14,
+      padding: "12px 16px",
+      background: "#eff6ff",
+      border: "1px solid #bfdbfe",
+      borderRadius: 10
+    }
+  }, /*#__PURE__*/React.createElement("p", {
+    style: {
+      fontSize: 12,
+      color: "#1e40af",
+      margin: 0,
+      lineHeight: 1.8
+    }
+  }, "\uD83D\uDCCC ", /*#__PURE__*/React.createElement("strong", null, "\u0E27\u0E34\u0E18\u0E35\u0E43\u0E0A\u0E49\u0E40\u0E21\u0E37\u0E48\u0E2D\u0E08\u0E30\u0E2D\u0E31\u0E1B\u0E40\u0E14\u0E15\u0E23\u0E30\u0E1A\u0E1A"), /*#__PURE__*/React.createElement("br", null), "1. \u0E01\u0E14 Export \u0E40\u0E1E\u0E37\u0E48\u0E2D\u0E1A\u0E31\u0E19\u0E17\u0E36\u0E01\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25\u0E25\u0E07\u0E40\u0E04\u0E23\u0E37\u0E48\u0E2D\u0E07", /*#__PURE__*/React.createElement("br", null), "2. \u0E2D\u0E31\u0E1B\u0E42\u0E2B\u0E25\u0E14 index.html \u0E43\u0E2B\u0E21\u0E48\u0E02\u0E36\u0E49\u0E19 GitHub", /*#__PURE__*/React.createElement("br", null), "3. \u0E40\u0E1B\u0E34\u0E14\u0E40\u0E27\u0E47\u0E1A\u0E43\u0E2B\u0E21\u0E48 \u2192 \u0E40\u0E02\u0E49\u0E32\u0E23\u0E30\u0E1A\u0E1A\u0E04\u0E23\u0E39 \u2192 \u0E15\u0E31\u0E49\u0E07\u0E04\u0E48\u0E32 \u2192 \u0E01\u0E14 Import"))));
+}
+
+// ── Dashboard ──────────────────────────────────────────────
+function Dashboard({
+  students,
+  scores,
+  currentYear,
+  currentTerm
+}) {
+  const termScores = scores.filter(s => s.year === currentYear && s.term === currentTerm);
+  const withGrade = termScores.map(s => ({
+    ...s,
+    total: (Number(s.collect) || 0) + (Number(s.exam) || 0),
+    grade: calcGrade((Number(s.collect) || 0) + (Number(s.exam) || 0))
+  }));
+  const total = withGrade.length;
+  const passed = withGrade.filter(s => s.grade !== "0").length;
+  const failed = total - passed;
+  const avgScore = total ? (withGrade.reduce((a, b) => a + b.total, 0) / total).toFixed(1) : "-";
+  const passRate = total ? (passed / total * 100).toFixed(1) : "-";
+  const gradeCount = {};
+  ["0", "1", "1.5", "2", "2.5", "3", "3.5", "4"].forEach(g => gradeCount[g] = withGrade.filter(s => s.grade === g).length);
+
+  // by subject
+  const subjectStats = {};
+  withGrade.forEach(s => {
+    if (!subjectStats[s.subject]) subjectStats[s.subject] = {
+      total: 0,
+      pass: 0,
+      scores: []
+    };
+    subjectStats[s.subject].total++;
+    if (s.grade !== "0") subjectStats[s.subject].pass++;
+    subjectStats[s.subject].scores.push(s.total);
+  });
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "repeat(4,1fr)",
+      gap: 14,
+      marginBottom: 20
+    }
+  }, [{
+    label: "รายการทั้งหมด",
+    value: total,
+    color: "#1a56db",
+    bg: "#eff6ff"
+  }, {
+    label: "ผ่าน",
+    value: passed,
+    color: "#16a34a",
+    bg: "#f0fdf4"
+  }, {
+    label: "ไม่ผ่าน",
+    value: failed,
+    color: "#dc2626",
+    bg: "#fef2f2"
+  }, {
+    label: "ร้อยละผ่าน",
+    value: passRate === "-" ? "-" : `${passRate}%`,
+    color: "#0d9488",
+    bg: "#f0fdfa"
+  }].map((c, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: {
+      background: c.bg,
+      borderRadius: 14,
+      padding: "16px 18px",
+      border: `1.5px solid ${c.color}30`
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13,
+      color: "#64748b",
+      marginBottom: 6
+    }
+  }, c.label), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 28,
+      fontWeight: 800,
+      color: c.color
+    }
+  }, c.value)))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "grid",
+      gridTemplateColumns: "1fr 1fr",
+      gap: 16
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 20,
+      boxShadow: "0 2px 12px rgba(0,0,0,0.06)"
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      fontSize: 15,
+      fontWeight: 700,
+      color: "#0f2744",
+      marginBottom: 16
+    }
+  }, "\uD83D\uDCCA \u0E01\u0E32\u0E23\u0E01\u0E23\u0E30\u0E08\u0E32\u0E22\u0E40\u0E01\u0E23\u0E14"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 8
+    }
+  }, ["4", "3.5", "3", "2.5", "2", "1.5", "1", "0"].map(g => {
+    const cnt = gradeCount[g] || 0;
+    const gc = gradeColor(g);
+    const pct = total > 0 ? cnt / total * 100 : 0;
+    return /*#__PURE__*/React.createElement("div", {
+      key: g,
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 10
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      style: {
+        width: 32,
+        fontSize: 14,
+        fontWeight: 700,
+        color: gc.text,
+        textAlign: "right"
+      }
+    }, g), /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1,
+        background: "#f1f5f9",
+        borderRadius: 4,
+        height: 20,
+        overflow: "hidden"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        height: "100%",
+        width: `${pct}%`,
+        background: gc.text,
+        borderRadius: 4,
+        minWidth: cnt > 0 ? 4 : 0,
+        transition: "width 0.5s"
+      }
+    })), /*#__PURE__*/React.createElement("span", {
+      style: {
+        width: 28,
+        fontSize: 13,
+        color: "#64748b",
+        textAlign: "right"
+      }
+    }, cnt));
+  })), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 16,
+      padding: "10px 14px",
+      background: "#f8fafc",
+      borderRadius: 10,
+      textAlign: "center"
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 13,
+      color: "#64748b"
+    }
+  }, "\u0E04\u0E48\u0E32\u0E40\u0E09\u0E25\u0E35\u0E48\u0E22\u0E04\u0E30\u0E41\u0E19\u0E19\u0E23\u0E27\u0E21: "), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 18,
+      fontWeight: 800,
+      color: "#1a56db"
+    }
+  }, avgScore))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      background: "#fff",
+      borderRadius: 16,
+      padding: 20,
+      boxShadow: "0 2px 12px rgba(0,0,0,0.06)"
+    }
+  }, /*#__PURE__*/React.createElement("h3", {
+    style: {
+      fontSize: 15,
+      fontWeight: 700,
+      color: "#0f2744",
+      marginBottom: 16
+    }
+  }, "\uD83D\uDCDA \u0E2A\u0E23\u0E38\u0E1B\u0E41\u0E15\u0E48\u0E25\u0E30\u0E27\u0E34\u0E0A\u0E32"), Object.keys(subjectStats).length === 0 ? /*#__PURE__*/React.createElement("p", {
+    style: {
+      color: "#94a3b8",
+      textAlign: "center",
+      padding: 20
+    }
+  }, "\u0E22\u0E31\u0E07\u0E44\u0E21\u0E48\u0E21\u0E35\u0E02\u0E49\u0E2D\u0E21\u0E39\u0E25") : /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      flexDirection: "column",
+      gap: 8,
+      maxHeight: 300,
+      overflowY: "auto"
+    }
+  }, Object.entries(subjectStats).map(([subj, stat]) => {
+    const avg = stat.scores.length ? (stat.scores.reduce((a, b) => a + b, 0) / stat.scores.length).toFixed(1) : "-";
+    const rate = stat.total ? (stat.pass / stat.total * 100).toFixed(0) : "-";
+    return /*#__PURE__*/React.createElement("div", {
+      key: subj,
+      style: {
+        background: "#f8fafc",
+        borderRadius: 10,
+        padding: "10px 14px",
+        border: "1px solid #e2e8f0"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        fontSize: 13,
+        fontWeight: 700,
+        color: "#1e293b",
+        marginBottom: 5
+      }
+    }, subj), /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        gap: 16,
+        fontSize: 12,
+        color: "#64748b"
+      }
+    }, /*#__PURE__*/React.createElement("span", null, "\u0E08\u0E33\u0E19\u0E27\u0E19 ", stat.total, " \u0E04\u0E19"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "#16a34a"
+      }
+    }, "\u0E1C\u0E48\u0E32\u0E19 ", rate, "%"), /*#__PURE__*/React.createElement("span", {
+      style: {
+        color: "#1a56db"
+      }
+    }, "\u0E40\u0E09\u0E25\u0E35\u0E48\u0E22 ", avg)));
+  })))));
+}
+
+// ── Helpers ────────────────────────────────────────────────
+const inputStyle = {
+  width: "100%",
+  border: "1.5px solid #e2e8f0",
+  borderRadius: 9,
+  padding: "10px 13px",
+  fontSize: 15,
+  fontFamily: "'Sarabun',sans-serif",
+  outline: "none",
+  color: "#1e293b",
+  marginBottom: 12,
+  display: "block"
+};
+const selectStyle = {
+  ...inputStyle,
+  background: "#fff",
+  cursor: "pointer"
+};
+function Label({
+  children
+}) {
+  return /*#__PURE__*/React.createElement("label", {
+    style: {
+      display: "block",
+      fontSize: 13,
+      fontWeight: 600,
+      color: "#374151",
+      marginBottom: 5
+    }
+  }, children);
+}
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+
+  </script>
+</body>
+</html>
